@@ -76,20 +76,30 @@ export default function Login() {
         throw new Error("Ingresa un correo institucional");
       }
 
-      // Verificar si el correo ya existe
-      try {
-        await api.post("/api/auth/login", {
-          email: mail,
-          password: "dummy",
-        });
-        setErr("El correo ya está registrado. Inicia sesión.");
-      } catch (e: any) {
-        if (e.message?.includes("Usuario no encontrado")) {
-          router.push(`/create-user?email=${encodeURIComponent(mail)}&from=email`);
-        } else {
-          setErr("El correo ya está registrado. Inicia sesión.");
-        }
+      // Verificar métodos de autenticación disponibles para el email
+      // Usar Firebase Auth REST API para verificar si el email existe
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+      if (!apiKey) {
+        throw new Error("Firebase no está configurado correctamente");
       }
+
+      // Verificar si el email ya está registrado
+      const checkUrl = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
+      const checkResponse = await fetch(checkUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: mail, continueUri: "http://localhost" }),
+      });
+
+      const checkData = await checkResponse.json();
+
+      if (checkData.registered === true) {
+        setErr("El correo ya está registrado. Inicia sesión.");
+        return;
+      }
+
+      // Si no está registrado, redirigir a crear cuenta
+      router.push(`/create-user?email=${encodeURIComponent(mail)}&from=email`);
     } catch (e: any) {
       setErr(e.message || "No se pudo verificar el correo");
     } finally {
