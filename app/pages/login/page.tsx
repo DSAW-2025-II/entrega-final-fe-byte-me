@@ -20,6 +20,7 @@ export default function Login() {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const checkMobile = () => {
       setIsMobile(window.matchMedia("(max-width: 768px)").matches);
     };
@@ -40,7 +41,7 @@ export default function Login() {
       });
 
       // Guardar el token
-      if (result.idToken) {
+      if (result.idToken && typeof window !== "undefined") {
         localStorage.setItem("idToken", result.idToken);
         if (result.refreshToken) {
           localStorage.setItem("refreshToken", result.refreshToken);
@@ -84,22 +85,30 @@ export default function Login() {
       }
 
       // Verificar si el email ya está registrado
-      const checkUrl = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
-      const checkResponse = await fetch(checkUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: mail, continueUri: "http://localhost" }),
-      });
+      try {
+        const checkUrl = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
+        const checkResponse = await fetch(checkUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            identifier: mail, 
+            continueUri: typeof window !== "undefined" ? window.location.origin : "http://localhost:3000" 
+          }),
+        });
 
-      const checkData = await checkResponse.json();
+        const checkData = await checkResponse.json();
 
-      if (checkData.registered === true) {
-        setErr("El correo ya está registrado. Inicia sesión.");
-        return;
+        if (checkData.registered === true) {
+          setErr("El correo ya está registrado. Inicia sesión.");
+          return;
+        }
+      } catch (checkError: any) {
+        // Si falla la verificación, continuar con el flujo de crear cuenta
+        console.warn("No se pudo verificar el email, continuando:", checkError.message);
       }
 
       // Si no está registrado, redirigir a crear cuenta
-      router.push(`/create-user?email=${encodeURIComponent(mail)}&from=email`);
+      router.push(`/pages/create-user?email=${encodeURIComponent(mail)}&from=email`);
     } catch (e: any) {
       setErr(e.message || "No se pudo verificar el correo");
     } finally {
@@ -113,9 +122,22 @@ export default function Login() {
     setGLoading(true);
 
     try {
+      if (typeof window === "undefined") {
+        throw new Error("No disponible en el servidor");
+      }
+
       // Usar Firebase Auth para autenticación con Google
       const { signInWithPopup } = await import("firebase/auth");
-      const { auth, googleProvider } = await import("@/lib/firebase");
+      const { auth, googleProvider, initializeFirebase } = await import("@/lib/firebase");
+
+      // Asegurar que Firebase esté inicializado
+      if (typeof window !== "undefined") {
+        initializeFirebase();
+      }
+
+      if (!auth || !googleProvider) {
+        throw new Error("Firebase no está inicializado. Verifica las variables de entorno.");
+      }
 
       const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken(true);
@@ -124,19 +146,21 @@ export default function Login() {
       const backendResult = await api.post("/api/auth/google", {}, idToken);
 
       if (backendResult.user) {
-        localStorage.setItem("idToken", idToken);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("idToken", idToken);
+        }
         
         // Verificar si es un usuario nuevo
         const checkResult = await api.post("/api/auth/ensure-user", {}, idToken);
         
         if (checkResult.created === true) {
-          router.push(`/create-user?from=google&uid=${backendResult.user.uid}&email=${backendResult.user.email}&name=${backendResult.user.name || ""}&photo=${backendResult.user.picture || ""}`);
+          router.push(`/pages/create-user?from=google&uid=${backendResult.user.uid}&email=${encodeURIComponent(backendResult.user.email || "")}&name=${encodeURIComponent(backendResult.user.name || "")}&photo=${encodeURIComponent(backendResult.user.picture || "")}`);
         } else {
           router.push("/dashboard");
         }
       }
     } catch (e: any) {
-      if (e.code !== "auth/popup-closed-by-user") {
+      if (e.code !== "auth/popup-closed-by-user" && e.message !== "No disponible en el servidor") {
         setErr(e.message || "Error con Google");
       }
     } finally {
