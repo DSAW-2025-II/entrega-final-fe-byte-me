@@ -27,6 +27,8 @@ export default function MapPicker({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<{ from?: any; to?: any }>({});
+  const directionsServiceRef = useRef<any>(null);
+  const directionsRendererRef = useRef<any>(null);
   const [googleReady, setGoogleReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -117,6 +119,18 @@ export default function MapPicker({
         
         console.log("✅ Mapa inicializado correctamente");
 
+        // Inicializar DirectionsService y DirectionsRenderer
+        directionsServiceRef.current = new window.google.maps.DirectionsService();
+        directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+          map: map,
+          suppressMarkers: true, // No mostrar marcadores automáticos, usaremos los nuestros
+          polylineOptions: {
+            strokeColor: "#4285F4",
+            strokeWeight: 5,
+            strokeOpacity: 0.8,
+          },
+        });
+
         // Geocoder para obtener dirección desde coordenadas
         const geocoder = new window.google.maps.Geocoder();
 
@@ -168,7 +182,7 @@ export default function MapPicker({
     }
   }, [googleReady, mode, onPlaceSelect]);
 
-  // Actualizar marcadores cuando cambian las coordenadas
+  // Actualizar marcadores y calcular ruta cuando cambian las coordenadas
   useEffect(() => {
     if (!mapInstanceRef.current || !googleReady) return;
 
@@ -199,8 +213,8 @@ export default function MapPicker({
 
         markersRef.current[key] = marker;
 
-        // Centrar mapa en el marcador
-        if (mode === key) {
+        // Centrar mapa en el marcador solo si no hay ruta
+        if (mode === key && !fromCoord && !toCoord) {
           mapInstanceRef.current.setCenter(coord);
         }
       }
@@ -208,6 +222,58 @@ export default function MapPicker({
 
     updateMarker(fromCoord, "from", "#4285F4");
     updateMarker(toCoord, "to", "#EA4335");
+
+    // Calcular y mostrar ruta si ambos puntos están seleccionados
+    if (fromCoord && toCoord && directionsServiceRef.current && directionsRendererRef.current) {
+      console.log("🗺️ Calculando ruta desde:", fromCoord, "hasta:", toCoord);
+      
+      directionsServiceRef.current.route(
+        {
+          origin: fromCoord,
+          destination: toCoord,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result: any, status: string) => {
+          if (status === window.google.maps.DirectionsStatus.OK) {
+            console.log("✅ Ruta calculada correctamente");
+            directionsRendererRef.current.setDirections(result);
+            
+            // Ajustar el mapa para mostrar toda la ruta
+            const bounds = new window.google.maps.LatLngBounds();
+            bounds.extend(fromCoord);
+            bounds.extend(toCoord);
+            mapInstanceRef.current.fitBounds(bounds);
+            
+            // Ajustar el padding para que los marcadores no queden en los bordes
+            mapInstanceRef.current.setOptions({
+              padding: { top: 50, right: 50, bottom: 50, left: 50 }
+            });
+          } else {
+            console.error("❌ Error calculando ruta:", status);
+            // Limpiar ruta anterior si hay error
+            directionsRendererRef.current.setDirections({ routes: [] });
+          }
+        }
+      );
+    } else {
+      // Limpiar ruta si no hay ambos puntos
+      if (directionsRendererRef.current) {
+        directionsRendererRef.current.setDirections({ routes: [] });
+      }
+      
+      // Si solo hay un punto, centrar en ese punto
+      if (fromCoord && !toCoord) {
+        mapInstanceRef.current.setCenter(fromCoord);
+        mapInstanceRef.current.setZoom(14);
+      } else if (toCoord && !fromCoord) {
+        mapInstanceRef.current.setCenter(toCoord);
+        mapInstanceRef.current.setZoom(14);
+      } else if (!fromCoord && !toCoord) {
+        // Si no hay puntos, volver a Bogotá
+        mapInstanceRef.current.setCenter({ lat: 4.6097, lng: -74.0817 });
+        mapInstanceRef.current.setZoom(12);
+      }
+    }
   }, [fromCoord, toCoord, googleReady, mode]);
 
   if (isLoading) {
