@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { api } from "@/lib/api";
+import { saveToken, ensureValidToken } from "@/lib/auth";
 import ButtonBlack from "@/components/ButtonBlack";
 import ButtonOutline from "@/components/ButtonOutline";
 import ButtonGoogle from "@/components/ButtonGoogle";
@@ -58,17 +59,24 @@ export default function Login() {
         password: pass,
       });
 
-      // Guardar el token
+      // Guardar el token temporal
       if (result.idToken) {
-        localStorage.setItem("idToken", result.idToken);
-        if (result.refreshToken) {
-          localStorage.setItem("refreshToken", result.refreshToken);
+        saveToken(result.idToken, result.refreshToken);
+        
+        // Verificar que el token sea válido antes de redirigir
+        const validToken = await ensureValidToken();
+        if (!validToken) {
+          throw new Error("No se pudo validar la sesión. Intenta nuevamente.");
         }
+      } else {
+        throw new Error("No se recibió token de autenticación");
       }
 
       setOk("Login exitoso");
       await delay(800);
       setOk("");
+      
+      // Redirigir al landing page solo después de verificar el token
       router.push("/pages/login/landing");
     } catch (e: any) {
       const errorMessage = e.message || "Error al iniciar sesión";
@@ -215,13 +223,38 @@ export default function Login() {
       const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken(true);
 
-      // Verificar con el backend
+      // Verificar con el backend que el token de Google sea válido
       const backendResult = await api.post("/api/auth/google", {}, idToken);
 
-      if (backendResult.user) {
-        localStorage.setItem("idToken", idToken);
-        
-        // Siempre redirigir a la landing page después del login con Google
+      if (!backendResult.user) {
+        throw new Error("No se pudo verificar la autenticación con Google");
+      }
+
+      // Guardar el token temporal
+      saveToken(idToken);
+      
+      // Verificar que el token sea válido
+      const validToken = await ensureValidToken();
+      if (!validToken) {
+        throw new Error("No se pudo validar la sesión. Intenta nuevamente.");
+      }
+
+      // Verificar si el usuario existe en Firestore
+      const userCheck = await api.post("/api/auth/ensure-user", {}, validToken);
+      
+      if (userCheck.created === true) {
+        // Usuario nuevo - redirigir a crear usuario con datos de Google
+        const user = result.user;
+        const params = new URLSearchParams({
+          from: "google",
+          uid: user.uid,
+          email: user.email || "",
+          name: user.displayName || "",
+          photo: user.photoURL || "",
+        });
+        router.push(`/pages/create-user?${params.toString()}`);
+      } else {
+        // Usuario existente - redirigir a landing page
         router.push("/pages/login/landing");
       }
     } catch (e: any) {

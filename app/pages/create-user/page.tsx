@@ -297,8 +297,8 @@ function CreateUserForm() {
       setOk("Usuario creado correctamente");
       await delay(1000);
       
-      // Redirigir al dashboard
-      router.replace("/dashboard");
+      // Redirigir a la landing page después de crear el usuario
+      router.replace("/pages/login/landing");
     } catch (e: any) {
       console.error("Error en handleSubmit:", e);
       try {

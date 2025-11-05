@@ -1,29 +1,48 @@
 "use client";
 
 import Image from "next/image";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { ensureValidToken } from "@/lib/auth";
+import PlaceAutocomplete from "@/components/PlaceAutocomplete";
+import MapPicker from "@/components/MapPicker";
 
 export default function LandingPage() {
+  const router = useRouter();
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Estados para lugares
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [fromCoord, setFromCoord] = useState<{ lat: number; lng: number } | null>(null);
+  const [toCoord, setToCoord] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapMode, setMapMode] = useState<"from" | "to">("from");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  
+  // Fecha mínima (hoy)
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const idToken = localStorage.getItem("idToken");
-        if (!idToken) {
-          setLoading(false);
+        // Verificar y obtener token válido
+        const validToken = await ensureValidToken();
+        if (!validToken) {
+          // Si no hay token válido, redirigir al login
+          router.push("/pages/login");
           return;
         }
 
-        // Intentar obtener datos de Firestore primero
+        // Obtener datos del usuario desde Firestore usando /api/me
         try {
-          const result = await api.get("/api/users/get", idToken);
-          if (result.success && result.user) {
-            console.log("Usuario obtenido de Firestore:", result.user);
-            console.log("Foto del usuario:", result.user.user_photo);
-            setUserData(result.user);
+          const result = await api.get("/api/me", validToken);
+          if (result && (result.first_name || result.email)) {
+            console.log("Usuario obtenido de Firestore:", result);
+            console.log("Foto del usuario:", result.user_photo);
+            setUserData(result);
             setLoading(false);
             return;
           }
@@ -121,43 +140,91 @@ export default function LandingPage() {
           </h1>
 
           <div style={styles.form}>
-            <label style={styles.srOnly}>From</label>
-            <div style={styles.inputWithIcon}> 
-              <select style={styles.select} defaultValue="">
-                <option value="" disabled>From to</option>
-                <option value="point_a">Point A</option>
-                <option value="point_b">Point B</option>
-                <option value="point_c">Point C</option>
-                <option value="point_d">Point D</option>
-                <option value="point_e">Point E</option>
-              </select>
-              <span style={styles.paperPlane} aria-hidden>✈️</span>
-              <span style={styles.dropdownArrow} aria-hidden>▼</span>
-            </div>
+                <label style={styles.label}>Punto de partida</label>
+                <div style={styles.inputWithIcon}> 
+                  <PlaceAutocomplete
+                    value={from}
+                    onChange={setFrom}
+                    onSelect={(place) => {
+                      setFrom(place.address);
+                      setFromCoord({ lat: place.lat, lng: place.lng });
+                    }}
+                    onSelectFromMap={() => {
+                      setMapMode("from");
+                      // Opcional: hacer scroll al mapa
+                      document.querySelector('[data-map-container]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }}
+                    placeholder="Buscar punto de partida..."
+                  />
+                  <span style={styles.paperPlane} aria-hidden>✈️</span>
+                </div>
 
-            <label style={styles.srOnly}>To</label>
-            <div style={styles.inputWithIcon}>
-              <select style={styles.select} defaultValue="">
-                <option value="" disabled>To</option>
-                <option value="point_a">Point A</option>
-                <option value="point_b">Point B</option>
-                <option value="point_c">Point C</option>
-                <option value="point_d">Point D</option>
-                <option value="point_e">Point E</option>
-              </select>
-              <span style={styles.dropdownArrow} aria-hidden>▼</span>
+                <label style={styles.label}>Destino</label>
+                <div style={styles.inputWithIcon}>
+                  <PlaceAutocomplete
+                    value={to}
+                    onChange={setTo}
+                    onSelect={(place) => {
+                      setTo(place.address);
+                      setToCoord({ lat: place.lat, lng: place.lng });
+                    }}
+                    onSelectFromMap={() => {
+                      setMapMode("to");
+                      // Opcional: hacer scroll al mapa
+                      document.querySelector('[data-map-container]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }}
+                    placeholder="Buscar destino..."
+                  />
+                  <span style={styles.dropdownArrow} aria-hidden>🎯</span>
+                </div>
+            
+            {/* Modo de selección en mapa */}
+            <div style={styles.mapModeContainer}>
+              <div style={styles.mapModeLabel}>Click en el mapa para seleccionar:</div>
+              <div style={styles.mapModeButtons}>
+                <button
+                  type="button"
+                  style={{
+                    ...styles.mapModeBtn,
+                    ...(mapMode === "from" ? styles.mapModeBtnActive : {}),
+                  }}
+                  onClick={() => setMapMode("from")}
+                >
+                  ✈️ Origen
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...styles.mapModeBtn,
+                    ...(mapMode === "to" ? styles.mapModeBtnActive : {}),
+                  }}
+                  onClick={() => setMapMode("to")}
+                >
+                  🎯 Destino
+                </button>
+              </div>
             </div>
 
             <div style={styles.row2}> 
               <div style={styles.half}> 
-                <label style={styles.smallLabel}>Date</label>
-                <input type="date" style={styles.dateInput} />
+                <label style={styles.smallLabel}>Fecha</label>
+                <input
+                  type="date"
+                  style={styles.dateInput}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  min={today}
+                />
               </div>
               <div style={styles.half}> 
-                <label style={styles.smallLabel}>Hour</label>
+                <label style={styles.smallLabel}>Hora</label>
                 <div style={styles.inputWithIcon}>
-                  <select style={styles.hourSelect}>
-                    <option value="">Select hour</option>
+                  <select
+                    style={styles.hourSelect}
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                  >
+                    <option value="">Seleccionar hora</option>
                     <option value="07:00">7:00 AM</option>
                     <option value="08:00">8:00 AM</option>
                     <option value="09:00">9:00 AM</option>
@@ -176,29 +243,67 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+            
+            {/* Mostrar coordenadas si están seleccionadas */}
+            {(fromCoord || toCoord) && (
+              <div style={styles.coordsContainer}>
+                {fromCoord && (
+                  <div style={styles.coordItem}>
+                    ✈️ Origen: {fromCoord.lat.toFixed(4)}, {fromCoord.lng.toFixed(4)}
+                  </div>
+                )}
+                {toCoord && (
+                  <div style={styles.coordItem}>
+                    🎯 Destino: {toCoord.lat.toFixed(4)}, {toCoord.lng.toFixed(4)}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div style={styles.buttonsRow}>
-              <button style={styles.primaryBtn}>Wheels me</button>
+              <button
+                style={styles.primaryBtn}
+                onClick={() => {
+                  if (!from || !to) {
+                    alert("Por favor selecciona el punto de partida y destino");
+                    return;
+                  }
+                  if (!fromCoord || !toCoord) {
+                    alert("Por favor selecciona los puntos en el mapa o usando el autocompletado");
+                    return;
+                  }
+                  // Aquí puedes agregar la lógica para crear el viaje
+                  console.log("Viaje:", { from, to, fromCoord, toCoord, date, time });
+                  alert("Funcionalidad de crear viaje próximamente");
+                }}
+              >
+                Wheels me
+              </button>
               <button style={styles.secondaryBtn}>My trips</button>
             </div>
           </div>
         </section>
 
-        {/* DERECHA: ESPACIO PARA LA IMAGEN */}
-        <aside style={styles.right}> 
-          <div style={styles.imagePlaceholder}>
-            <div style={styles.imageContainer}>
-              <Image
-                src="/Group27.png"
-                alt="Ilustración de autos y ciudad"
-                fill
-                sizes="(max-width: 1200px) 520px, 520px"
-                style={{ objectFit: "cover", borderRadius: 12 }}
-                priority
-              />
-            </div>
-          </div>
-        </aside>
+            {/* DERECHA: MAPA INTERACTIVO */}
+            <aside style={styles.right}> 
+              <div style={styles.mapContainer} data-map-container>
+                <MapPicker
+                  onPlaceSelect={(place) => {
+                    if (mapMode === "from") {
+                      setFrom(place.address);
+                      setFromCoord({ lat: place.lat, lng: place.lng });
+                    } else {
+                      setTo(place.address);
+                      setToCoord({ lat: place.lat, lng: place.lng });
+                    }
+                  }}
+                  mode={mapMode}
+                  fromCoord={fromCoord}
+                  toCoord={toCoord}
+                  height="640px"
+                />
+              </div>
+            </aside>
       </main>
     </div>
   );
@@ -427,6 +532,13 @@ const styles: { [k: string]: React.CSSProperties } = {
     alignItems: "center",
     justifyContent: "center",
   },
+  mapContainer: {
+    width: 520,
+    height: 640,
+    borderRadius: 12,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+    overflow: "hidden",
+  },
   imagePlaceholder: {
     width: 520,
     height: 640,
@@ -441,6 +553,59 @@ const styles: { [k: string]: React.CSSProperties } = {
     height: "100%",
     borderRadius: 12,
     overflow: "hidden",
+  },
+  label: {
+    fontSize: 14,
+    color: "#333",
+    marginTop: 8,
+    fontWeight: 500,
+  },
+  mapModeContainer: {
+    marginTop: 12,
+    padding: 12,
+    background: "#f8f9fa",
+    borderRadius: 8,
+    border: "1px solid #e9ecef",
+  },
+  mapModeLabel: {
+    fontSize: 12,
+    color: "#6c757d",
+    marginBottom: 8,
+  },
+  mapModeButtons: {
+    display: "flex",
+    gap: 8,
+  },
+  mapModeBtn: {
+    flex: 1,
+    padding: "8px 12px",
+    borderRadius: 6,
+    border: "1px solid #dee2e6",
+    background: "#fff",
+    color: "#495057",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "all 0.2s",
+  },
+  mapModeBtnActive: {
+    background: "#0b1b27",
+    color: "#fff",
+    borderColor: "#0b1b27",
+  },
+  coordsContainer: {
+    marginTop: 8,
+    padding: 10,
+    background: "#f8f9fa",
+    borderRadius: 6,
+    fontSize: 12,
+    color: "#6c757d",
+    display: "grid",
+    gap: 6,
+  },
+  coordItem: {
+    fontSize: 11,
+    fontFamily: "monospace",
   },
 };
 
