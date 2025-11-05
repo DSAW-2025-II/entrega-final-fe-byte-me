@@ -236,62 +236,68 @@ function CreateUserForm() {
         user_photo: null,
       };
 
-      // Registrar usuario en el backend primero (sin foto)
-      await api.post("/api/register", base, idToken);
+      // PASO 1: Registrar usuario en el backend (sin foto) - ESTO ES OBLIGATORIO
+      console.log("Guardando usuario en la base de datos...", base);
+      const registerResponse = await api.post("/api/register", base, idToken);
+      console.log("Usuario guardado en la base de datos:", registerResponse);
+      
+      // Verificar que el registro fue exitoso
+      if (!registerResponse || (registerResponse.error && !registerResponse.message)) {
+        throw new Error("No se pudo guardar el usuario en la base de datos. Intenta nuevamente.");
+      }
 
-      // Foto opcional - intentar en background sin bloquear
+      // PASO 2: Foto opcional - intentar subir y actualizar
       let photoUrl = null;
       
-      // Intentar subir foto en paralelo (no bloquea)
-      const photoPromise = (async () => {
-        if (prefill.photoURL) {
-          // Si viene de Google, usar la foto existente
-          photoUrl = prefill.photoURL;
-          try {
-            await api.post("/api/register", { ...base, user_photo: photoUrl }, idToken);
-          } catch (photoErr: any) {
-            console.warn("No se pudo actualizar la foto de Google:", photoErr);
-          }
-        } else if (file && storage) {
-          try {
-            const currentStorage = storage;
-            if (!currentStorage) {
-              throw new Error("Firebase Storage no está inicializado");
-            }
-            
-            // Timeout corto de 5 segundos
-            const uploadPromise = async () => {
-              const storageRef = ref(currentStorage, `users/${uid}/profile.jpg`);
-              await uploadBytes(storageRef, file);
-              return await getDownloadURL(storageRef);
-            };
-
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("Timeout")), 5000)
-            );
-
-            photoUrl = await Promise.race([uploadPromise(), timeoutPromise]) as string;
-            
-            // Actualizar usuario con la foto
-            await api.post("/api/register", { ...base, user_photo: photoUrl }, idToken);
-          } catch (photoErr: any) {
-            console.warn("No se pudo subir la foto (continuando sin foto):", photoErr);
-            // No mostrar error al usuario - la foto es opcional
-          }
+      if (prefill.photoURL) {
+        // Si viene de Google, usar la foto existente
+        photoUrl = prefill.photoURL;
+        try {
+          console.log("Actualizando usuario con foto de Google...");
+          await api.post("/api/register", { ...base, user_photo: photoUrl }, idToken);
+          console.log("Foto de Google actualizada correctamente");
+        } catch (photoErr: any) {
+          console.warn("No se pudo actualizar la foto de Google (continuando sin foto):", photoErr);
+          // No es crítico, continuar sin foto
         }
-      })();
+      } else if (file && storage) {
+        try {
+          const currentStorage = storage;
+          if (!currentStorage) {
+            throw new Error("Firebase Storage no está inicializado");
+          }
+          
+          console.log("Subiendo foto a Firebase Storage...");
+          
+          // Timeout de 8 segundos para la subida de foto
+          const uploadPromise = async () => {
+            const storageRef = ref(currentStorage, `users/${uid}/profile.jpg`);
+            await uploadBytes(storageRef, file);
+            return await getDownloadURL(storageRef);
+          };
 
-      // No esperar la foto - continuar inmediatamente
-      setOk("Usuario creado correctamente");
-      await delay(800);
-      
-      // Esperar la foto solo si se completa rápido (no bloquea)
-      try {
-        await Promise.race([photoPromise, new Promise(resolve => setTimeout(resolve, 1000))]);
-      } catch {
-        // Ignorar errores de foto
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout subiendo foto")), 8000)
+          );
+
+          photoUrl = await Promise.race([uploadPromise(), timeoutPromise]) as string;
+          console.log("Foto subida correctamente:", photoUrl);
+          
+          // Actualizar usuario con la foto
+          console.log("Actualizando usuario con foto subida...");
+          await api.post("/api/register", { ...base, user_photo: photoUrl }, idToken);
+          console.log("Usuario actualizado con foto correctamente");
+        } catch (photoErr: any) {
+          console.warn("No se pudo subir la foto (continuando sin foto):", photoErr);
+          // No es crítico, el usuario ya está guardado en la base de datos
+        }
       }
+
+      // Mostrar mensaje de éxito
+      setOk("Usuario creado correctamente");
+      await delay(1000);
       
+      // Redirigir al dashboard
       router.replace("/dashboard");
     } catch (e: any) {
       console.error("Error en handleSubmit:", e);

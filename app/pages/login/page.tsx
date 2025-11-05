@@ -77,7 +77,7 @@ export default function Login() {
       if (errorMessage.includes("Usuario no encontrado") || errorMessage.includes("EMAIL_NOT_FOUND")) {
         // Si el usuario no está registrado, redirigir automáticamente a registro
         setErr("");
-        router.push(`/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
+        router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
         return;
       } else if (errorMessage.includes("Contraseña incorrecta") || errorMessage.includes("INVALID_PASSWORD")) {
         setErr("Contraseña incorrecta");
@@ -116,7 +116,7 @@ export default function Login() {
               // El usuario no existe, redirigir a registro
               console.log("Email no registrado, redirigiendo a registro");
               setErr("");
-              router.push(`/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
+              router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
               return;
             } else if (checkData.registered === true || hasSignInMethods) {
               // El usuario existe explícitamente, entonces la contraseña es incorrecta
@@ -127,14 +127,14 @@ export default function Login() {
               // (mejor UX: permitir que el usuario cree su cuenta)
               console.log("Estado del email no claro, redirigiendo a registro");
               setErr("");
-              router.push(`/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
+              router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
               return;
             }
           } else {
             // Si no podemos verificar, intentar redirigir a registro por defecto
             // para que el usuario pueda crear su cuenta
             setErr("");
-            router.push(`/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
+            router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
             return;
           }
         } catch (checkError) {
@@ -142,7 +142,7 @@ export default function Login() {
           // para que el usuario pueda intentar crear su cuenta
           console.error("Error verificando email:", checkError);
           setErr("");
-          router.push(`/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
+          router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
           return;
         }
       } else {
@@ -187,7 +187,7 @@ export default function Login() {
       }
 
       // Si no está registrado, redirigir a crear cuenta
-      router.push(`/create-user?email=${encodeURIComponent(mail)}&from=email`);
+      router.push(`/pages/create-user?email=${encodeURIComponent(mail)}&from=email`);
     } catch (e: any) {
       setErr(e.message || "No se pudo verificar el correo");
     } finally {
@@ -203,7 +203,14 @@ export default function Login() {
     try {
       // Usar Firebase Auth para autenticación con Google
       const { signInWithPopup } = await import("firebase/auth");
-      const { auth, googleProvider } = await import("@/lib/firebase");
+      const { auth, googleProvider, initializeFirebase } = await import("@/lib/firebase");
+
+      // Asegurar que Firebase esté inicializado
+      initializeFirebase();
+
+      if (!auth || !googleProvider) {
+        throw new Error("Firebase no está inicializado. Recarga la página.");
+      }
 
       const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken(true);
