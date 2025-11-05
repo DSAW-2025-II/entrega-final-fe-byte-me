@@ -33,8 +33,16 @@ export default function LandingPage() {
 
         // Si no hay datos en Firestore, obtener de Firebase Auth
         try {
-          const { auth } = await import("@/lib/firebase");
+          const { auth, initializeFirebase } = await import("@/lib/firebase");
           const { onAuthStateChanged } = await import("firebase/auth");
+          
+          // Asegurar que Firebase esté inicializado
+          initializeFirebase();
+          
+          if (!auth) {
+            setLoading(false);
+            return;
+          }
           
           onAuthStateChanged(auth, (currentUser) => {
             if (currentUser) {
