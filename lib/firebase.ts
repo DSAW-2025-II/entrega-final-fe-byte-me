@@ -59,7 +59,7 @@ if (typeof window !== "undefined") {
 // Estas funciones solo funcionan en el cliente
 export function getAuth() {
   if (typeof window === "undefined") {
-    throw new Error("getAuth() solo puede ser llamado en el cliente");
+    return null;
   }
   if (!auth) {
     initializeFirebase();
@@ -69,7 +69,7 @@ export function getAuth() {
 
 export function getGoogleProvider() {
   if (typeof window === "undefined") {
-    throw new Error("getGoogleProvider() solo puede ser llamado en el cliente");
+    return null;
   }
   if (!googleProvider) {
     initializeFirebase();
