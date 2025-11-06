@@ -239,7 +239,7 @@ function CreateUserForm() {
 
       // PASO 1: Registrar usuario en el backend (sin foto) - ESTO ES OBLIGATORIO
       console.log("Guardando usuario en la base de datos...", base);
-      const registerResponse = await api.post("/api/register", base, idToken);
+      const registerResponse = await api.post("/api/auth/register", base, idToken);
       console.log("Usuario guardado en la base de datos:", registerResponse);
       
       // Verificar que el registro fue exitoso
@@ -255,7 +255,7 @@ function CreateUserForm() {
         photoUrl = prefill.photoURL;
         try {
           console.log("Actualizando usuario con foto de Google...");
-          await api.post("/api/register", { ...base, user_photo: photoUrl }, idToken);
+          await api.post("/api/auth/register", { ...base, user_photo: photoUrl }, idToken);
           console.log("Foto de Google actualizada correctamente");
         } catch (photoErr: any) {
           console.warn("No se pudo actualizar la foto de Google (continuando sin foto):", photoErr);
@@ -286,7 +286,7 @@ function CreateUserForm() {
           
           // Actualizar usuario con la foto
           console.log("Actualizando usuario con foto subida...");
-          await api.post("/api/register", { ...base, user_photo: photoUrl }, idToken);
+          await api.post("/api/auth/register", { ...base, user_photo: photoUrl }, idToken);
           console.log("Usuario actualizado con foto correctamente");
         } catch (photoErr: any) {
           console.warn("No se pudo subir la foto (continuando sin foto):", photoErr);
