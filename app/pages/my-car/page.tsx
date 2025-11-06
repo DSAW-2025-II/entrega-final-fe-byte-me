@@ -107,11 +107,11 @@ export default function MyCarPage() {
     try {
       initializeFirebase();
       if (!auth) {
-        router.push("/pages/login", { replace: true });
+        router.replace("/pages/login");
         return;
       }
       await signOut(auth);
-      router.push("/pages/login", { replace: true });
+      router.replace("/pages/login");
       setTimeout(() => window.location.replace("/pages/login"), 0);
     } catch (e) {
       alert("No se pudo cerrar sesión");
