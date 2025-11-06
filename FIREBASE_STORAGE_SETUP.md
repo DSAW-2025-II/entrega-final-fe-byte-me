@@ -28,17 +28,31 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=movetogether-e31d4.firebasestorage.app
 
 ```javascript
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Permitir lectura y escritura para usuarios autenticados en su propia carpeta
+    // Reglas para fotos de perfil de usuario
     match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Permitir lectura pública de fotos de perfil (opcional)
-    match /users/{userId}/profile.jpg {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    // Reglas para fotos de vehículos
+    match /vehicles/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Reglas para fotos de SOAT
+    match /soat/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Permitir acceso a otros archivos si el usuario está autenticado
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
   }
 }
