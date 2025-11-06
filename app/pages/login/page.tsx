@@ -211,13 +211,54 @@ export default function Login() {
     try {
       // Usar Firebase Auth para autenticación con Google
       const { signInWithPopup } = await import("firebase/auth");
-      const { auth, googleProvider, initializeFirebase } = await import("@/lib/firebase");
+      const firebaseModule = await import("@/lib/firebase");
+      const { initializeFirebase } = firebaseModule;
 
       // Asegurar que Firebase esté inicializado
       initializeFirebase();
+      
+      // Esperar un momento para que Firebase se inicialice
+      await delay(200);
+      
+      // Re-importar para obtener las instancias actualizadas después de la inicialización
+      const { auth, googleProvider } = await import("@/lib/firebase");
 
       if (!auth || !googleProvider) {
-        throw new Error("Firebase no está inicializado. Recarga la página.");
+        // Intentar una vez más
+        initializeFirebase();
+        await delay(300);
+        const { auth: authRetry, googleProvider: providerRetry } = await import("@/lib/firebase");
+        if (!authRetry || !providerRetry) {
+          throw new Error("Firebase no está inicializado. Verifica las variables de entorno y recarga la página.");
+        }
+        const result = await signInWithPopup(authRetry, providerRetry);
+        const idToken = await result.user.getIdToken(true);
+        
+        // Continuar con el flujo usando authRetry
+        const backendResult = await api.post("/api/auth/google", {}, idToken);
+        if (!backendResult.user) {
+          throw new Error("No se pudo verificar la autenticación con Google");
+        }
+        saveToken(idToken);
+        const validToken = await ensureValidToken();
+        if (!validToken) {
+          throw new Error("No se pudo validar la sesión. Intenta nuevamente.");
+        }
+        const userCheck = await api.post("/api/auth/ensure-user", {}, validToken);
+        if (userCheck.created === true) {
+          const user = result.user;
+          const params = new URLSearchParams({
+            from: "google",
+            uid: user.uid,
+            email: user.email || "",
+            name: user.displayName || "",
+            photo: user.photoURL || "",
+          });
+          router.push(`/pages/create-user?${params.toString()}`);
+        } else {
+          router.push("/pages/login/landing");
+        }
+        return;
       }
 
       const result = await signInWithPopup(auth, googleProvider);

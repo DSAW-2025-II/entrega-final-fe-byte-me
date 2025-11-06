@@ -55,5 +55,27 @@ if (typeof window !== "undefined") {
   initializeFirebase();
 }
 
+// Funciones para obtener las instancias (útil para imports dinámicos)
+// Estas funciones solo funcionan en el cliente
+export function getAuth() {
+  if (typeof window === "undefined") {
+    throw new Error("getAuth() solo puede ser llamado en el cliente");
+  }
+  if (!auth) {
+    initializeFirebase();
+  }
+  return auth;
+}
+
+export function getGoogleProvider() {
+  if (typeof window === "undefined") {
+    throw new Error("getGoogleProvider() solo puede ser llamado en el cliente");
+  }
+  if (!googleProvider) {
+    initializeFirebase();
+  }
+  return googleProvider;
+}
+
 export { auth, storage, googleProvider, initializeFirebase };
 
