@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { auth, storage, initializeFirebase } from "@/lib/firebase";
 import {
   createUserWithEmailAndPassword,
@@ -50,7 +51,7 @@ function CreateUserForm() {
   const [phone, setPhone] = useState("");
   const [universityCode, setUniversityCode] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState(prefill.photoURL || null);
+  const [preview, setPreview] = useState<string | null>(prefill.photoURL || "/iconUser.png");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
@@ -419,12 +420,26 @@ function CreateUserForm() {
         {!isMobile && (
           <div style={S.right}>
             <div style={S.bg}>
+              <Image
+                src="/bgUser.png"
+                alt="Background"
+                fill
+                style={{ objectFit: "cover" }}
+                priority
+              />
               <div style={S.userSection}>
-                <img
-                  src={preview || "/placeholder-user.png"}
-                  alt="avatar"
-                  style={S.avatar}
-                />
+                <div style={S.avatarContainer}>
+                  <img
+                    src={preview || "/iconUser.png"}
+                    alt="avatar"
+                    style={S.avatar}
+                    onError={(e) => {
+                      // Si falla la imagen, usar el icono por defecto
+                      const target = e.target as HTMLImageElement;
+                      target.src = "/iconUser.png";
+                    }}
+                  />
+                </div>
                 <label style={S.selectPhotoBtn}>
                   <input
                     type="file"
@@ -471,26 +486,32 @@ const S = {
   },
   right: { position: "relative" as const },
   bg: {
-    position: "absolute" as const,
-    inset: 0,
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
+    position: "relative" as const,
+    width: "100%",
+    height: "100%",
     display: "grid",
     placeItems: "center",
   },
   userSection: {
+    position: "relative" as const,
+    zIndex: 2,
     display: "grid",
     gap: 12,
     justifyItems: "center",
   },
-  avatar: {
+  avatarContainer: {
+    position: "relative" as const,
     width: 100,
     height: 100,
     borderRadius: "50%",
-    objectFit: "cover" as const,
+    overflow: "hidden" as const,
     border: "2px solid #fff",
     boxShadow: "0 0 8px rgba(0,0,0,0.2)",
+  },
+  avatar: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover" as const,
   },
   selectPhotoBtn: {
     padding: "10px 20px",
@@ -512,6 +533,7 @@ const S = {
     fontSize: 16,
     textAlign: "center" as const,
     backdropFilter: "blur(5px)",
+    fontWeight: 500,
   },
   title: {
     fontSize: 36,
@@ -521,8 +543,9 @@ const S = {
   },
   label: {
     fontSize: 14,
-    color: "#333",
+    color: "#111",
     marginTop: 6,
+    fontWeight: 500,
   },
   input: {
     height: 44,
@@ -531,6 +554,7 @@ const S = {
     padding: "0 14px",
     fontSize: 15,
     background: "#fff",
+    color: "#111",
   },
   error: {
     background: "#ffeef0",

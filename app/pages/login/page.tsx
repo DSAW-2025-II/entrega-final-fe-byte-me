@@ -328,7 +328,7 @@ export default function Login() {
               onClick={() => router.push("/recover-password")}
               style={S.forgot}
             >
-              Forgot Your Password?
+              Recover password
             </button>
           </div>
         </div>
