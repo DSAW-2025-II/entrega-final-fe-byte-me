@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { api } from "@/lib/api";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export default function VerifyCode() {
+function VerifyCodeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
