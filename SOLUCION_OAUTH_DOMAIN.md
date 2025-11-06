@@ -14,22 +14,24 @@ El error indica que el dominio de Vercel no está autorizado para operaciones OA
 ### Paso 2: Agregar dominios de Vercel
 Agrega estos dominios a la lista:
 
-1. **Dominio específico actual:**
+1. **Dominio específico actual (del error):**
    ```
-   move-together2-front-q1ykwa1wp-movetogethers-projects.vercel.app
-   ```
-
-2. **Dominio de producción principal:**
-   ```
-   front-l8ih1ubqb-movetogethers-projects.vercel.app
+   move-together2-front-p02ov3m8n-movetogethers-projects.vercel.app
    ```
 
-3. **Patrón wildcard para todos los deployments:**
+2. **Patrón wildcard para TODOS los deployments de Vercel (RECOMENDADO):**
    ```
    *.vercel.app
    ```
+   ⚠️ **IMPORTANTE:** Agregar `*.vercel.app` es la mejor solución porque cubre todos los deployments automáticos de Vercel, incluyendo los previews y producción.
 
-4. **Dominio personalizado (si tienes uno):**
+3. **Dominios de producción específicos (opcional):**
+   ```
+   front-lt2kk2tme-movetogethers-projects.vercel.app
+   front-fgl53bzpe-movetogethers-projects.vercel.app
+   ```
+
+4. **Dominio personalizado (si tienes uno configurado):**
    ```
    tu-dominio.com
    ```

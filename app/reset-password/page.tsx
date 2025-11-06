@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { api } from "@/lib/api";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export default function ResetPassword() {
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
@@ -160,6 +160,14 @@ export default function ResetPassword() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ResetPassword() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>Cargando...</div>}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
 
