@@ -32,6 +32,101 @@ export default function MapPicker({
   const [googleReady, setGoogleReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Función para inicializar el mapa
+  const initializeMap = () => {
+    if (!googleReady || !mapRef.current || !window.google?.maps) {
+      console.log("⏸️ No se puede inicializar el mapa:", {
+        googleReady,
+        hasElement: !!mapRef.current,
+        hasGoogle: !!window.google?.maps,
+      });
+      return;
+    }
+
+    try {
+      console.log("🗺️ Inicializando mapa en el elemento:", mapRef.current);
+
+      // Inicializar mapa centrado en Bogotá, Colombia
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: { lat: 4.6097, lng: -74.0817 }, // Bogotá
+        zoom: 12,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+      });
+
+      mapInstanceRef.current = map;
+      setIsLoading(false);
+      
+      console.log("✅ Mapa inicializado correctamente");
+
+      // Inicializar DirectionsService y DirectionsRenderer
+      if (window.google.maps.DirectionsService && window.google.maps.DirectionsRenderer) {
+        directionsServiceRef.current = new window.google.maps.DirectionsService();
+        directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+          map: map,
+          suppressMarkers: true, // No mostrar marcadores automáticos, usaremos los nuestros
+          polylineOptions: {
+            strokeColor: "#4285F4",
+            strokeWeight: 5,
+            strokeOpacity: 0.8,
+          },
+        });
+        console.log("✅ DirectionsService y DirectionsRenderer inicializados");
+      } else {
+        console.error("❌ DirectionsService o DirectionsRenderer no disponibles");
+      }
+
+      // Geocoder para obtener dirección desde coordenadas
+      const geocoder = new window.google.maps.Geocoder();
+
+      // Listener para clicks en el mapa
+      map.addListener("click", (e: any) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+
+        // Obtener dirección desde coordenadas
+        geocoder.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
+          if (status === "OK" && results[0]) {
+            const address = results[0].formatted_address;
+
+            // Actualizar marcador según el modo
+            if (markersRef.current[mode]) {
+              markersRef.current[mode].setMap(null);
+            }
+
+            const marker = new window.google.maps.Marker({
+              position: { lat, lng },
+              map: map,
+              title: mode === "from" ? "Punto de partida" : "Destino",
+              icon: {
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: mode === "from" ? "#4285F4" : "#EA4335",
+                fillOpacity: 1,
+                strokeColor: "#fff",
+                strokeWeight: 2,
+              },
+            });
+
+            markersRef.current[mode] = marker;
+
+            // Llamar al callback
+            onPlaceSelect({
+              address,
+              lat,
+              lng,
+            });
+          }
+        });
+      });
+    } catch (error) {
+      console.error("❌ Error inicializando mapa:", error);
+      setIsLoading(false);
+      setGoogleReady(false);
+    }
+  };
+
   useEffect(() => {
     // Cargar Google Maps API usando el loader centralizado
     if (typeof window === "undefined") return;
@@ -72,119 +167,45 @@ export default function MapPicker({
       return;
     }
     
-    // Esperar a que el elemento del mapa esté disponible
-    if (!mapRef.current) {
-      console.log("⏳ Esperando elemento del mapa...");
-      const checkInterval = setInterval(() => {
-        if (mapRef.current && window.google?.maps) {
-          console.log("✅ Elemento del mapa encontrado");
-          clearInterval(checkInterval);
-          initializeMap();
-        }
-      }, 50);
-      
-      // Timeout después de 2 segundos
-      setTimeout(() => {
+    // Esperar a que el elemento del mapa esté disponible en el DOM
+    const checkElement = () => {
+      if (mapRef.current && window.google?.maps) {
+        console.log("✅ Elemento del mapa encontrado, inicializando...");
+        initializeMap();
+        return true;
+      }
+      return false;
+    };
+    
+    // Verificar inmediatamente
+    if (checkElement()) {
+      return;
+    }
+    
+    // Si no está disponible, esperar con intervalos
+    console.log("⏳ Esperando elemento del mapa...");
+    const checkInterval = setInterval(() => {
+      if (checkElement()) {
         clearInterval(checkInterval);
-        if (!mapRef.current) {
-          console.error("❌ Timeout esperando elemento del mapa");
-          setIsLoading(false);
-        }
-      }, 2000);
-      
-      return () => clearInterval(checkInterval);
-    }
-    
-    initializeMap();
-    
-    function initializeMap() {
-      if (!googleReady || !mapRef.current || !window.google?.maps) {
-        return;
       }
-
-      try {
-        console.log("🗺️ Inicializando mapa en el elemento:", mapRef.current);
-
-        // Inicializar mapa centrado en Bogotá, Colombia
-        const map = new window.google.maps.Map(mapRef.current, {
-          center: { lat: 4.6097, lng: -74.0817 }, // Bogotá
-          zoom: 12,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: true,
-        });
-
-        mapInstanceRef.current = map;
+    }, 100);
+    
+    // Timeout después de 5 segundos (aumentado de 2)
+    const timeout = setTimeout(() => {
+      clearInterval(checkInterval);
+      if (!mapRef.current) {
+        console.error("❌ Timeout esperando elemento del mapa después de 5 segundos");
         setIsLoading(false);
-        
-        console.log("✅ Mapa inicializado correctamente");
-
-        // Inicializar DirectionsService y DirectionsRenderer
-        if (window.google.maps.DirectionsService && window.google.maps.DirectionsRenderer) {
-          directionsServiceRef.current = new window.google.maps.DirectionsService();
-          directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
-            map: map,
-            suppressMarkers: true, // No mostrar marcadores automáticos, usaremos los nuestros
-            polylineOptions: {
-              strokeColor: "#4285F4",
-              strokeWeight: 5,
-              strokeOpacity: 0.8,
-            },
-          });
-          console.log("✅ DirectionsService y DirectionsRenderer inicializados");
-        } else {
-          console.error("❌ DirectionsService o DirectionsRenderer no disponibles");
-        }
-
-        // Geocoder para obtener dirección desde coordenadas
-        const geocoder = new window.google.maps.Geocoder();
-
-        // Listener para clicks en el mapa
-        map.addListener("click", (e: any) => {
-          const lat = e.latLng.lat();
-          const lng = e.latLng.lng();
-
-          // Obtener dirección desde coordenadas
-          geocoder.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
-            if (status === "OK" && results[0]) {
-              const address = results[0].formatted_address;
-
-              // Actualizar marcador según el modo
-              if (markersRef.current[mode]) {
-                markersRef.current[mode].setMap(null);
-              }
-
-              const marker = new window.google.maps.Marker({
-                position: { lat, lng },
-                map: map,
-                title: mode === "from" ? "Punto de partida" : "Destino",
-                icon: {
-                  path: window.google.maps.SymbolPath.CIRCLE,
-                  scale: 8,
-                  fillColor: mode === "from" ? "#4285F4" : "#EA4335",
-                  fillOpacity: 1,
-                  strokeColor: "#fff",
-                  strokeWeight: 2,
-                },
-              });
-
-              markersRef.current[mode] = marker;
-
-              // Llamar al callback
-              onPlaceSelect({
-                address,
-                lat,
-                lng,
-              });
-            }
-          });
-        });
-      } catch (error) {
-        console.error("❌ Error inicializando mapa:", error);
+      } else if (!window.google?.maps) {
+        console.error("❌ Google Maps no disponible después del timeout");
         setIsLoading(false);
-        setGoogleReady(false);
       }
-    }
+    }, 5000);
+    
+    return () => {
+      clearInterval(checkInterval);
+      clearTimeout(timeout);
+    };
   }, [googleReady, mode, onPlaceSelect]);
 
   // Actualizar marcadores y calcular ruta cuando cambian las coordenadas

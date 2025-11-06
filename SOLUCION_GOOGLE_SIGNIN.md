@@ -20,16 +20,20 @@ This will prevent signInWithPopup from working.
 
 ### Paso 2: Agregar el dominio de Vercel
 
-Verás una lista de dominios autorizados. Haz clic en el botón **"Add domain"** (Agregar dominio) y agrega:
+**⚠️ IMPORTANTE:** Firebase NO acepta wildcards como `*.vercel.app`. Debes agregar el dominio específico.
 
-```
-*.vercel.app
-```
+**Opción A: Agregar el dominio actual (Recomendado)**
+1. Ve a Vercel → tu proyecto frontend → Deployments
+2. Copia el dominio del último deployment (ej: `front-g8faouxtd-movetogethers-projects.vercel.app`)
+3. En Firebase, haz clic en **"Agregar un dominio"**
+4. Pega el dominio exacto (sin `https://`, sin `/`)
+5. Haz clic en **"Agregar"**
 
-**¿Por qué `*.vercel.app`?**
-- Vercel crea un dominio único para cada deployment
-- El wildcard `*` cubre TODOS los deployments automáticamente
-- No necesitas agregar cada dominio individualmente
+**Opción B: Agregar múltiples dominios**
+Si tienes varios deployments, agrega cada uno individualmente:
+- `front-g8faouxtd-movetogethers-projects.vercel.app`
+- `front-jmjm55xv5-movetogethers-projects.vercel.app`
+- `move-together2-front.vercel.app` (si existe como dominio principal)
 
 ### Paso 3: Verificar
 

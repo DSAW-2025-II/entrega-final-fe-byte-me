@@ -81,7 +81,8 @@ export function loadGoogleMaps(): Promise<void> {
 
     // Crear nuevo script
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geocoding,directions&language=es&region=CO`;
+    // Nota: "directions" no es una librería separada, DirectionsService está incluido en la API principal
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geocoding&language=es&region=CO`;
     script.async = true;
     script.defer = true;
     script.id = "google-maps-script";

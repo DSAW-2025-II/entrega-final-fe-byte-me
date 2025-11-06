@@ -545,6 +545,7 @@ const styles: { [k: string]: React.CSSProperties } = {
     justifyContent: "center",
   },
   mapContainer: {
+    minHeight: "640px",
     width: 520,
     height: 640,
     borderRadius: 12,
