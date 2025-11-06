@@ -330,56 +330,6 @@ export default function MapPicker({
     }
   }, [fromCoord, toCoord, googleReady, mode]);
 
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          width: "100%",
-          height,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#f5f5f5",
-          borderRadius: 12,
-          color: "#666",
-        }}
-      >
-        <div>Cargando mapa...</div>
-      </div>
-    );
-  }
-
-  if (!googleReady) {
-    return (
-      <div
-        style={{
-          width: "100%",
-          height,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#f5f5f5",
-          borderRadius: 12,
-          color: "#666",
-          padding: 20,
-          textAlign: "center",
-        }}
-      >
-        <div style={{ marginBottom: 10 }}>⚠️ Error al cargar Google Maps</div>
-        <div style={{ fontSize: 12, color: "#999" }}>
-          Verifica:
-          <br />- API Key configurada
-          <br />- APIs habilitadas en Google Cloud
-          <br />- Restricciones de HTTP referrers
-        </div>
-        <div style={{ fontSize: 11, color: "#999", marginTop: 10 }}>
-          Abre la consola (F12) para más detalles
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       style={{
@@ -392,6 +342,7 @@ export default function MapPicker({
         backgroundColor: "#e5e5e5",
       }}
     >
+      {/* El elemento del mapa siempre debe estar presente para que el ref funcione */}
       <div
         ref={mapRef}
         style={{
@@ -401,6 +352,62 @@ export default function MapPicker({
           display: "block",
         }}
       />
+      
+      {/* Overlay de carga */}
+      {isLoading && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(245, 245, 245, 0.9)",
+            borderRadius: 12,
+            color: "#666",
+            zIndex: 1000,
+          }}
+        >
+          <div>Cargando mapa...</div>
+        </div>
+      )}
+      
+      {/* Overlay de error */}
+      {!googleReady && !isLoading && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(245, 245, 245, 0.95)",
+            borderRadius: 12,
+            color: "#666",
+            padding: 20,
+            textAlign: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div style={{ marginBottom: 10 }}>⚠️ Error al cargar Google Maps</div>
+          <div style={{ fontSize: 12, color: "#999" }}>
+            Verifica:
+            <br />- API Key configurada
+            <br />- APIs habilitadas en Google Cloud
+            <br />- Restricciones de HTTP referrers
+          </div>
+          <div style={{ fontSize: 11, color: "#999", marginTop: 10 }}>
+            Abre la consola (F12) para más detalles
+          </div>
+        </div>
+      )}
     </div>
   );
 }
