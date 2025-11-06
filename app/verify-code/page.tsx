@@ -299,3 +299,11 @@ const S = {
   },
 };
 
+export default function VerifyCode() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>Cargando...</div>}>
+      <VerifyCodeContent />
+    </Suspense>
+  );
+}
+
