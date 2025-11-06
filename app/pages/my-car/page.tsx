@@ -105,6 +105,11 @@ export default function MyCarPage() {
 
   const handleLogout = async () => {
     try {
+      initializeFirebase();
+      if (!auth) {
+        router.push("/pages/login", { replace: true });
+        return;
+      }
       await signOut(auth);
       router.push("/pages/login", { replace: true });
       setTimeout(() => window.location.replace("/pages/login"), 0);
