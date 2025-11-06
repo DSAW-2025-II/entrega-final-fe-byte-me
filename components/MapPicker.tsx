@@ -120,16 +120,21 @@ export default function MapPicker({
         console.log("✅ Mapa inicializado correctamente");
 
         // Inicializar DirectionsService y DirectionsRenderer
-        directionsServiceRef.current = new window.google.maps.DirectionsService();
-        directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
-          map: map,
-          suppressMarkers: true, // No mostrar marcadores automáticos, usaremos los nuestros
-          polylineOptions: {
-            strokeColor: "#4285F4",
-            strokeWeight: 5,
-            strokeOpacity: 0.8,
-          },
-        });
+        if (window.google.maps.DirectionsService && window.google.maps.DirectionsRenderer) {
+          directionsServiceRef.current = new window.google.maps.DirectionsService();
+          directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+            map: map,
+            suppressMarkers: true, // No mostrar marcadores automáticos, usaremos los nuestros
+            polylineOptions: {
+              strokeColor: "#4285F4",
+              strokeWeight: 5,
+              strokeOpacity: 0.8,
+            },
+          });
+          console.log("✅ DirectionsService y DirectionsRenderer inicializados");
+        } else {
+          console.error("❌ DirectionsService o DirectionsRenderer no disponibles");
+        }
 
         // Geocoder para obtener dirección desde coordenadas
         const geocoder = new window.google.maps.Geocoder();
@@ -224,40 +229,67 @@ export default function MapPicker({
     updateMarker(toCoord, "to", "#EA4335");
 
     // Calcular y mostrar ruta si ambos puntos están seleccionados
-    if (fromCoord && toCoord && directionsServiceRef.current && directionsRendererRef.current) {
+    if (fromCoord && toCoord) {
+      console.log("🗺️ Ambos puntos seleccionados:", { fromCoord, toCoord });
+      
+      if (!directionsServiceRef.current || !directionsRendererRef.current) {
+        console.warn("⚠️ DirectionsService o DirectionsRenderer no están inicializados");
+        return;
+      }
+      
       console.log("🗺️ Calculando ruta desde:", fromCoord, "hasta:", toCoord);
+      
+      // Limpiar ruta anterior antes de calcular nueva
+      directionsRendererRef.current.setDirections({ routes: [] });
       
       directionsServiceRef.current.route(
         {
           origin: fromCoord,
           destination: toCoord,
           travelMode: window.google.maps.TravelMode.DRIVING,
+          optimizeWaypoints: false,
         },
         (result: any, status: string) => {
+          console.log("📊 Estado de la ruta:", status);
+          
           if (status === window.google.maps.DirectionsStatus.OK) {
             console.log("✅ Ruta calculada correctamente");
+            console.log("📏 Distancia:", result.routes[0]?.legs[0]?.distance?.text);
+            console.log("⏱️ Duración:", result.routes[0]?.legs[0]?.duration?.text);
+            
+            // Mostrar la ruta en el mapa
             directionsRendererRef.current.setDirections(result);
             
-            // Ajustar el mapa para mostrar toda la ruta
-            const bounds = new window.google.maps.LatLngBounds();
-            bounds.extend(fromCoord);
-            bounds.extend(toCoord);
-            mapInstanceRef.current.fitBounds(bounds);
-            
-            // Ajustar el padding para que los marcadores no queden en los bordes
-            mapInstanceRef.current.setOptions({
-              padding: { top: 50, right: 50, bottom: 50, left: 50 }
-            });
+            // Ajustar el mapa para mostrar toda la ruta usando los bounds de la ruta
+            if (result.routes && result.routes[0] && result.routes[0].bounds) {
+              mapInstanceRef.current.fitBounds(result.routes[0].bounds, {
+                padding: { top: 50, right: 50, bottom: 50, left: 50 }
+              });
+            } else {
+              // Fallback: usar los puntos de origen y destino
+              const bounds = new window.google.maps.LatLngBounds();
+              bounds.extend(fromCoord);
+              bounds.extend(toCoord);
+              mapInstanceRef.current.fitBounds(bounds, {
+                padding: { top: 50, right: 50, bottom: 50, left: 50 }
+              });
+            }
           } else {
             console.error("❌ Error calculando ruta:", status);
-            // Limpiar ruta anterior si hay error
-            directionsRendererRef.current.setDirections({ routes: [] });
+            console.error("Detalles:", {
+              status,
+              fromCoord,
+              toCoord,
+              hasDirectionsService: !!directionsServiceRef.current,
+              hasDirectionsRenderer: !!directionsRendererRef.current,
+            });
           }
         }
       );
     } else {
       // Limpiar ruta si no hay ambos puntos
       if (directionsRendererRef.current) {
+        console.log("🧹 Limpiando ruta (faltan puntos)");
         directionsRendererRef.current.setDirections({ routes: [] });
       }
       

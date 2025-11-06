@@ -42,6 +42,14 @@
 3. Click en el resultado
 4. Click en **"ENABLE"**
 
+### API 4: Directions API ⚠️ IMPORTANTE PARA RUTAS
+1. Vuelve a **APIs & Services** > **Library**
+2. Busca: `Directions API`
+3. Click en el resultado
+4. Click en **"ENABLE"**
+
+**Nota:** Esta API es necesaria para calcular y mostrar rutas entre el origen y destino en el mapa.
+
 ## ⚙️ Paso 4: Configurar Restricciones de la API Key (Opcional pero Recomendado)
 
 1. Vuelve a **APIs & Services** > **Credentials**
@@ -59,10 +67,11 @@
 
 4. En **"API restrictions"**, selecciona:
    - **Restrict key**
-   - Marca SOLO estas 3 APIs:
+   - Marca SOLO estas 4 APIs:
      - ✅ Maps JavaScript API
      - ✅ Places API
      - ✅ Geocoding API
+     - ✅ Directions API ⚠️ **NECESARIA PARA RUTAS**
 
 5. Click en **"SAVE"** (GUARDAR)
 

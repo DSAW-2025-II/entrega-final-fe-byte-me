@@ -111,7 +111,19 @@ export default function LandingPage() {
       <header style={styles.topbar}>
         <div style={styles.topbarContent}>
           <div style={styles.brand}>MoveTogether</div>
-          <div style={styles.user}>
+          <button
+            style={{
+              ...styles.user,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+            onClick={() => router.push("/pages/user")}
+            title="Ver perfil"
+          >
             <div style={styles.userAvatarContainer}>
               {userPhoto ? (
                 <Image
@@ -125,7 +137,7 @@ export default function LandingPage() {
               )}
             </div>
             <span style={styles.userName}>{userName}</span>
-          </div>
+          </button>
         </div>
       </header>
 

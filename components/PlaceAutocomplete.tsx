@@ -77,11 +77,15 @@ export default function PlaceAutocomplete({
         return;
       }
 
+      // Determinar tipos según el contexto
+      // Para ciudades, usar (cities) o (regions)
+      const types = ["establishment", "geocode"];
+      
       autocompleteServiceRef.current.getPlacePredictions(
         {
           input: input,
           componentRestrictions: { country: "co" },
-          types: ["establishment", "geocode"],
+          types: types,
         },
         (predictions: any[], status: string) => {
           if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {

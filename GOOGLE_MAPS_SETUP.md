@@ -18,12 +18,13 @@ En **APIs & Services** > **Library**, habilita las siguientes APIs:
 - **Maps JavaScript API**
 - **Places API**
 - **Geocoding API**
+- **Directions API** ⚠️ **NECESARIA PARA MOSTRAR RUTAS**
 
 ### 3. Configurar restricciones (Recomendado)
 
 En la configuración de tu API Key:
 - **Application restrictions**: Restringe por HTTP referrers
-- **API restrictions**: Restringe solo a las APIs necesarias (Maps JavaScript API, Places API, Geocoding API)
+- **API restrictions**: Restringe solo a las APIs necesarias (Maps JavaScript API, Places API, Geocoding API, Directions API)
 
 Para desarrollo local, agrega:
 - `http://localhost:3000/*`
