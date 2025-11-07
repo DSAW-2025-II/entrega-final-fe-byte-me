@@ -63,6 +63,27 @@ export default function Login() {
       if (result.idToken) {
         saveToken(result.idToken, result.refreshToken);
         
+        // IMPORTANTE: También autenticar al usuario en Firebase Auth del cliente
+        // Esto es necesario para que funcione el cambio de contraseña y otras funciones
+        try {
+          const { signInWithEmailAndPassword } = await import("firebase/auth");
+          const { auth, initializeFirebase } = await import("@/lib/firebase");
+          
+          initializeFirebase();
+          await delay(200);
+          
+          if (auth) {
+            // Autenticar al usuario en Firebase Auth del cliente
+            await signInWithEmailAndPassword(auth, trimmedEmail, pass);
+            console.log("✅ Usuario autenticado en Firebase Auth del cliente");
+          }
+        } catch (firebaseAuthError: any) {
+          // Si falla la autenticación en Firebase Auth, no es crítico
+          // porque ya tenemos el token del backend
+          console.warn("⚠️ No se pudo autenticar en Firebase Auth del cliente:", firebaseAuthError);
+          // Continuar de todas formas porque el token del backend es válido
+        }
+        
         // Verificar que el token sea válido antes de redirigir
         const validToken = await ensureValidToken();
         if (!validToken) {
@@ -87,7 +108,37 @@ export default function Login() {
         setErr("");
         router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
         return;
-      } else if (errorMessage.includes("Contraseña incorrecta") || errorMessage.includes("INVALID_PASSWORD")) {
+      } else if (
+        errorMessage.includes("Contraseña incorrecta") || 
+        errorMessage.includes("INVALID_PASSWORD") ||
+        errorMessage.includes("INVALID_LOGIN_CREDENTIALS")
+      ) {
+        // Verificar si el email existe para determinar si es contraseña incorrecta o usuario no encontrado
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+          if (apiKey) {
+            const checkUrl = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
+            const checkResponse = await fetch(checkUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                identifier: trimmedEmail, 
+                continueUri: "http://localhost" 
+              }),
+            });
+            
+            const checkData = await checkResponse.json();
+            
+            // Si el email está registrado, entonces la contraseña es incorrecta
+            if (checkData.registered === true || (checkData.signinMethods && checkData.signinMethods.length > 0)) {
+              setErr("Contraseña incorrecta");
+              return;
+            }
+          }
+        } catch (checkError) {
+          // Si no se puede verificar, asumir que es contraseña incorrecta
+          console.warn("No se pudo verificar el email, asumiendo contraseña incorrecta");
+        }
         setErr("Contraseña incorrecta");
       } else if (errorMessage.includes("INVALID_LOGIN_CREDENTIALS")) {
         // Firebase puede devolver INVALID_LOGIN_CREDENTIALS para ambos casos

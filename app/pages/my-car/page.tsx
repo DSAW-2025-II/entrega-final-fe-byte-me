@@ -9,6 +9,7 @@ import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { initializeFirebase } from "@/lib/firebase";
+import { useTheme } from "@/app/contexts/ThemeContext";
 
 // Imagen por defecto del carro (usar la segunda imagen proporcionada)
 const DEFAULT_CAR_IMAGE = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800&h=600&fit=crop";
@@ -27,6 +28,7 @@ interface Vehicle {
 
 export default function MyCarPage() {
   const router = useRouter();
+  const { theme, language } = useTheme();
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -274,16 +276,34 @@ export default function MyCarPage() {
 
   const currentVehicle = vehicles[currentIndex];
 
+  // Aplicar estilos dinámicos según el tema
+  const pageStyle = {
+    ...styles.page,
+    background: theme === "dark" 
+      ? "linear-gradient(180deg, #1a1a1a 0%, #2a2a2a 30%, #0a0a0a 100%)"
+      : "linear-gradient(180deg, #cfd8e3 0%, #e8edf3 30%, #0f2230 100%)",
+  };
+  
+  const containerStyle = {
+    ...styles.container,
+    width: isMobile ? "96vw" : "min(1180px, 96vw)",
+    background: theme === "dark" ? "#1a1a1a" : "#fff",
+    color: theme === "dark" ? "#ededed" : "#111827",
+  };
+
   return (
-    <div style={styles.page}>
-      <div style={{
-        ...styles.container,
-        width: isMobile ? "96vw" : "min(1180px, 96vw)",
-      }}>
+    <div style={pageStyle}>
+      <div style={containerStyle}>
         {/* TOP BAR */}
-        <header style={styles.topbar}>
+        <header style={{
+          ...styles.topbar,
+          background: theme === "dark" ? "#2a2a2a" : "transparent",
+        }}>
           <button
-            style={styles.brandBtn}
+            style={{
+              ...styles.brandBtn,
+              color: theme === "dark" ? "#ededed" : "#0f2230",
+            }}
             onClick={() => router.push("/pages/login/landing")}
           >
             MoveTogether
@@ -314,12 +334,16 @@ export default function MyCarPage() {
           }}
         >
           {/* SIDEBAR */}
-          <aside style={styles.sidebar}>
+          <aside style={{
+            ...styles.sidebar,
+            background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
+          }}>
             {[
               { label: "My trips", action: () => dev("My trips") },
               { label: "My Car", action: () => {} },
-              { label: "Settings", action: () => dev("Settings") },
-              { label: "Help", action: () => dev("Help") },
+              { label: "My Profile", action: () => router.push("/pages/user") },
+              { label: "Settings", action: () => router.push("/pages/settings") },
+              { label: "Help", action: () => router.push("/pages/help") },
             ].map((item) => (
               <button
                 key={item.label}
@@ -343,7 +367,10 @@ export default function MyCarPage() {
           {/* MAIN */}
           <main style={styles.main}>
             <div style={styles.headerSection}>
-              <h2 style={styles.sectionTitle}>My cars</h2>
+              <h2 style={{
+                ...styles.sectionTitle,
+                color: theme === "dark" ? "#ededed" : "#0f2230",
+              }}>My cars</h2>
               <button
                 style={styles.addBtn}
                 onClick={() => setShowAddForm(true)}
@@ -369,6 +396,7 @@ export default function MyCarPage() {
               <section style={{
                 ...styles.cardWide,
                 gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
               }}>
                 {/* Imagen del carro */}
                 <div style={styles.carImageContainer}>
@@ -424,6 +452,46 @@ export default function MyCarPage() {
                       )}
                     </div>
                   </div>
+                  {/* Botón eliminar - solo si hay 2 o más carros */}
+                  {vehicles.length >= 2 && (
+                    <div style={styles.carField}>
+                      <button
+                        style={styles.deleteBtn}
+                        onClick={async () => {
+                          if (!currentVehicle?.vehicle_id) return;
+                          
+                          if (!confirm(`¿Estás seguro de que deseas eliminar el vehículo ${currentVehicle.license_plate}?`)) {
+                            return;
+                          }
+
+                          try {
+                            const validToken = await ensureValidToken();
+                            if (!validToken) {
+                              router.push("/pages/login");
+                              return;
+                            }
+
+                            await api.delete("/api/vehicles", { vehicle_id: currentVehicle.vehicle_id }, validToken);
+                            
+                            // Recargar vehículos
+                            await fetchVehicles();
+                            
+                            // Ajustar el índice si es necesario
+                            if (currentIndex >= vehicles.length - 1) {
+                              setCurrentIndex(Math.max(0, vehicles.length - 2));
+                            }
+                            
+                            alert("Vehículo eliminado correctamente");
+                          } catch (error: any) {
+                            console.error("Error eliminando vehículo:", error);
+                            alert(error.message || "Error al eliminar el vehículo. Intenta nuevamente.");
+                          }
+                        }}
+                      >
+                        🗑️ Eliminar vehículo
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Controles del carrusel */}
@@ -628,17 +696,16 @@ export default function MyCarPage() {
 const styles: any = {
   page: {
     minHeight: "100vh",
-    background:
-      "linear-gradient(180deg, #cfd8e3 0%, #e8edf3 30%, #0f2230 100%)",
     padding: 24,
     display: "grid",
     placeItems: "center",
+    transition: "background 0.3s ease",
   },
   container: {
-    background: "#fff",
     borderRadius: 12,
     boxShadow: "0 18px 50px rgba(0,0,0,0.12)",
     overflow: "hidden",
+    transition: "background 0.3s ease, color 0.3s ease",
   },
   topbar: {
     display: "flex",
@@ -969,6 +1036,18 @@ const styles: any = {
     placeItems: "center",
     color: "#333",
     fontWeight: 600,
+  },
+  deleteBtn: {
+    background: "#ef4444",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    padding: "10px 16px",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+    width: "100%",
+    transition: "background-color 0.2s",
   },
 };
 

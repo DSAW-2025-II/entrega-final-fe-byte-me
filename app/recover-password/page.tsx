@@ -52,7 +52,8 @@ export default function RecoverPassword() {
     setLoading(true);
 
     try {
-      // Enviar código OTP usando nuestro endpoint
+      // Enviar código OTP usando nuestro endpoint del backend
+      // El backend genera el código y lo muestra en la consola para desarrollo
       await api.post("/api/auth/send-otp", { email: trimmedEmail });
 
       setOk("Código de recuperación enviado. Revisa tu correo electrónico.");
@@ -61,7 +62,7 @@ export default function RecoverPassword() {
       // Redirigir a la página de verificación de código
       router.push(`/verify-code?email=${encodeURIComponent(trimmedEmail)}`);
     } catch (e: any) {
-      setErr(e.message || "Error al enviar el código de recuperación");
+      setErr(e.message || "Error al generar el código de recuperación");
     } finally {
       setLoading(false);
     }
