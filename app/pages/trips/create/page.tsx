@@ -1280,49 +1280,4 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
   },
-  "@media (max-width: 1024px)": {
-    tripCard: {
-      width: "100%",
-    },
-    tripRow: {
-      gridTemplateColumns: "1fr auto 1fr",
-      gridTemplateRows: "auto auto",
-      rowGap: 22,
-    },
-    switchWrapper: {
-      order: 2,
-      padding: 0,
-    },
-    timeCard: {
-      gridColumn: "1 / span 3",
-    },
-  },
-  "@media (max-width: 768px)": {
-    container: {
-      padding: 24,
-    },
-    tripRow: {
-      gridTemplateColumns: "1fr",
-      gridTemplateRows: "auto",
-      gap: 16,
-    },
-    switchWrapper: {
-      order: 0,
-    },
-    tripCard: {
-      width: "100%",
-      gap: 24,
-    },
-    dateTimeRow: {
-      gridTemplateColumns: "1fr",
-      gap: 12,
-    },
-    availableItem: {
-      padding: "14px",
-      gap: 12,
-    },
-    availableAction: {
-      width: "100%",
-    },
-  },
 };
