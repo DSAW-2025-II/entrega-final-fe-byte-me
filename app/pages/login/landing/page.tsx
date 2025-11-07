@@ -8,6 +8,8 @@ import { ensureValidToken } from "@/lib/auth";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 import MapPicker from "@/components/MapPicker";
 
+const TRIP_DRAFT_STORAGE_KEY = "movetogether_tripDraft";
+
 export default function LandingPage() {
   const router = useRouter();
   const [userData, setUserData] = useState<any>(null);
@@ -284,9 +286,29 @@ export default function LandingPage() {
                     alert("Por favor selecciona los puntos en el mapa o usando el autocompletado");
                     return;
                   }
-                  // Aquí puedes agregar la lógica para crear el viaje
-                  console.log("Viaje:", { from, to, fromCoord, toCoord, date, time });
-                  alert("Funcionalidad de crear viaje próximamente");
+                  if (!date) {
+                    alert("Selecciona la fecha de salida");
+                    return;
+                  }
+                  if (!time) {
+                    alert("Selecciona la hora de salida");
+                    return;
+                  }
+
+                  const draft = {
+                    from,
+                    to,
+                    fromCoord,
+                    toCoord,
+                    date,
+                    time,
+                  };
+
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem(TRIP_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+                  }
+
+                  router.push("/pages/trips/create");
                 }}
               >
                 Wheels me
