@@ -8,9 +8,11 @@ import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 import MapPicker from "@/components/MapPicker";
+import { useTheme } from "@/app/contexts/ThemeContext";
 
 export default function UserPage() {
   const router = useRouter();
+  const { theme, language } = useTheme();
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -160,21 +162,37 @@ export default function UserPage() {
     );
   }
 
+  // Aplicar estilos dinámicos según el tema
+  const pageStyle = {
+    ...styles.page,
+    padding: isMobile ? "16px 12px" : "32px 24px",
+    background: theme === "dark" 
+      ? "linear-gradient(180deg, #1a1a1a 0%, #2a2a2a 30%, #0a0a0a 100%)"
+      : "linear-gradient(180deg, #cfd8e3 0%, #e8edf3 30%, #0f2230 100%)",
+  };
+  
+  const containerStyle = {
+    ...styles.container,
+    background: theme === "dark" ? "#1a1a1a" : "#fff",
+    color: theme === "dark" ? "#ededed" : "#111827",
+  };
+
   return (
-    <div style={{
-      ...styles.page,
-      padding: isMobile ? "16px 12px" : "32px 24px",
-    }}>
-      <div style={styles.container}>
+    <div style={pageStyle}>
+      <div style={containerStyle}>
         {/* TOP BAR */}
         <header style={{
           ...styles.topbar,
           flexDirection: isMobile ? "column" : "row",
           gap: isMobile ? 12 : 12,
           padding: isMobile ? "16px" : "20px",
+          background: theme === "dark" ? "#2a2a2a" : "transparent",
         }}>
           <button
-            style={styles.brandBtn}
+            style={{
+              ...styles.brandBtn,
+              color: theme === "dark" ? "#ededed" : "#0f2230",
+            }}
             onClick={() => router.push("/pages/login/landing")}
           >
             MoveTogether
@@ -232,25 +250,32 @@ export default function UserPage() {
             overflowX: isMobile ? "auto" : "visible",
             gap: isMobile ? 8 : 8,
             padding: isMobile ? "12px" : "14px",
+            background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
           }}>
-            {["My trips", "My Car", "Settings", "Help"].map((t) => (
-              <button
-                key={t}
-                style={{
-                  ...styles.sideItem,
-                  whiteSpace: isMobile ? "nowrap" : "normal",
-                  minWidth: isMobile ? "120px" : "auto",
-                }}
-                onClick={() =>
-                  t === "My Car"
-                    ? router.push("/pages/my-car")
-                    : dev(t)
-                }
-              >
-                <span>{t}</span>
-                <span style={{ fontWeight: 700 }}>+</span>
-              </button>
-            ))}
+            {[
+              { label: "My trips", action: () => dev("My trips"), path: "/pages/trips" },
+              { label: "My Car", action: () => router.push("/pages/my-car"), path: "/pages/my-car" },
+              { label: "My Profile", action: () => {}, path: "/pages/user" },
+              { label: "Settings", action: () => router.push("/pages/settings"), path: "/pages/settings" },
+              { label: "Help", action: () => router.push("/pages/help"), path: "/pages/help" },
+            ].map((item) => {
+              const isActive = typeof window !== "undefined" && window.location.pathname === item.path;
+              return (
+                <button
+                  key={item.label}
+                  style={{
+                    ...styles.sideItem,
+                    whiteSpace: isMobile ? "nowrap" : "normal",
+                    minWidth: isMobile ? "120px" : "auto",
+                    backgroundColor: isActive ? "#d1d5db" : "transparent",
+                  }}
+                  onClick={item.action}
+                >
+                  <span>{item.label}</span>
+                  <span style={{ fontWeight: 700 }}>+</span>
+                </button>
+              );
+            })}
             {/* Cerrar sesión real */}
             <button style={{
               ...styles.sideItem,
@@ -270,12 +295,14 @@ export default function UserPage() {
             <h2 style={{
               ...styles.sectionTitle,
               fontSize: isMobile ? 20 : 22,
+              color: theme === "dark" ? "#ededed" : "#0f2230",
             }}>My profile</h2>
 
             {/* HEADER CARD */}
             <section style={{
               ...styles.cardWide,
               padding: isMobile ? "16px" : "24px",
+              background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
             }}>
               <div style={{
                 ...styles.headerRow,
@@ -303,15 +330,27 @@ export default function UserPage() {
                   </button>
                 </div>
                 <div style={{ display: "grid", gap: 4 }}>
-                  <div style={styles.nameText}>{fullName}</div>
-                  <div style={styles.muted}>{me.email || "—"}</div>
-                  <div style={styles.muted}>{me.phone || "—"}</div>
+                  <div style={{
+                    ...styles.nameText,
+                    color: theme === "dark" ? "#ededed" : "#0f2230",
+                  }}>{fullName}</div>
+                  <div style={{
+                    ...styles.muted,
+                    color: theme === "dark" ? "#a0a0a0" : "#475569",
+                  }}>{me.email || "—"}</div>
+                  <div style={{
+                    ...styles.muted,
+                    color: theme === "dark" ? "#a0a0a0" : "#475569",
+                  }}>{me.phone || "—"}</div>
                 </div>
               </div>
             </section>
 
             {/* DETAILS */}
-            <section style={styles.cardWide}>
+            <section style={{
+              ...styles.cardWide,
+              background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
+            }}>
               <div style={styles.cardHeader}>
                 <div />
                 {isEditing ? (
@@ -662,8 +701,8 @@ const styles: { [k: string]: React.CSSProperties } = {
     cursor: "pointer",
     fontSize: 18,
   },
-  nameText: { fontSize: 18, fontWeight: 800, color: "#0f2230" },
-  muted: { color: "#475569", fontSize: 14 },
+  nameText: { fontSize: 18, fontWeight: 800 },
+  muted: { fontSize: 14 },
   grid3: { display: "grid", gap: 14 },
   field: {
     background: "#f3f4f6",

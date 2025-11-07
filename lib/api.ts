@@ -95,6 +95,14 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   },
+
+  async delete(endpoint: string, data?: any, token?: string) {
+    return this.request(endpoint, {
+      method: "DELETE",
+      body: data ? JSON.stringify(data) : undefined,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  },
 };
 
 export default api;

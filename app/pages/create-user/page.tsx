@@ -16,8 +16,20 @@ import ButtonOutline from "@/components/ButtonOutline";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Celular Colombia
-const CO_CELL_RE = /^(?:\+57\s*)?(3\d{2})[\s-]?(\d{3})[\s-]?(\d{4})$/;
+// Celular Colombia - debe iniciar con 3 y tener exactamente 10 dígitos
+const CO_CELL_RE = /^3\d{9}$/;
+
+// Código institucional - 4 ceros seguidos y luego 6 dígitos (total 10)
+const UNIVERSITY_CODE_RE = /^0000\d{6}$/;
+
+// Solo letras (incluye acentos y espacios)
+const ONLY_LETTERS_RE = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/;
+
+// Email debe terminar en @unisabana.edu.co
+const UNISABANA_EMAIL_RE = /^[a-zA-Z0-9._-]+@unisabana\.edu\.co$/;
+
+// Contraseña segura: mínimo 8 caracteres, al menos una mayúscula, una minúscula y un número
+const STRONG_PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
 function CreateUserForm() {
   const router = useRouter();
@@ -55,6 +67,14 @@ function CreateUserForm() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
+
+  // Validaciones en tiempo real
+  const [emailError, setEmailError] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [lastNameError, setLastNameError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [passError, setPassError] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -100,6 +120,59 @@ function CreateUserForm() {
     router.replace("/pages/login");
   }
 
+  // Funciones de validación
+  const validateEmail = (email: string): string | null => {
+    if (!email?.trim()) return "El correo es obligatorio.";
+    if (!UNISABANA_EMAIL_RE.test(email.trim())) {
+      return "El correo debe ser institucional (@unisabana.edu.co).";
+    }
+    return null;
+  };
+
+  const validateUniversityCode = (code: string): string | null => {
+    if (!code?.trim()) return "El código de la universidad es obligatorio.";
+    const trimmed = code.trim();
+    if (trimmed.length !== 10) {
+      return "El código debe tener exactamente 10 dígitos (0000 + 6 dígitos).";
+    }
+    if (!UNIVERSITY_CODE_RE.test(trimmed)) {
+      return "El código debe comenzar con 0000 seguido de 6 dígitos (ej: 0000123456).";
+    }
+    return null;
+  };
+
+  const validateName = (name: string, fieldName: string): string | null => {
+    if (!name?.trim()) return `${fieldName} es obligatorio.`;
+    if (!ONLY_LETTERS_RE.test(name.trim())) {
+      return `${fieldName} solo puede contener letras.`;
+    }
+    return null;
+  };
+
+  const validatePhone = (phone: string): string | null => {
+    if (!phone?.trim()) return "El teléfono celular es obligatorio.";
+    // Remover espacios, guiones y +57 para validar
+    const cleaned = phone.replace(/[\s-+]/g, "").replace(/^57/, "");
+    if (cleaned.length !== 10) {
+      return "El teléfono debe tener exactamente 10 dígitos.";
+    }
+    if (!CO_CELL_RE.test(cleaned)) {
+      return "El teléfono debe iniciar con 3 y tener 10 dígitos (ej: 3123456789).";
+    }
+    return null;
+  };
+
+  const validatePassword = (password: string): string | null => {
+    if (!password) return "La contraseña es obligatoria.";
+    if (password.length < 8) {
+      return "La contraseña debe tener al menos 8 caracteres.";
+    }
+    if (!STRONG_PASSWORD_RE.test(password)) {
+      return "La contraseña debe contener al menos una mayúscula, una minúscula y un número.";
+    }
+    return null;
+  };
+
   function validateClient({
     first_name,
     last_name,
@@ -119,25 +192,96 @@ function CreateUserForm() {
     pass: string;
     universityCode: string;
   }): string | null {
-    if (!universityCode?.trim()) return "El código de la universidad es obligatorio.";
-    if (!first_name?.trim()) return "El nombre no puede ser nulo.";
-    if (!last_name?.trim()) return "El apellido no puede ser nulo.";
-    if (!phone?.trim()) return "El teléfono celular es obligatorio.";
-    if (!CO_CELL_RE.test(phone.trim())) {
-      return "Celular inválido (Colombia). Debe iniciar en 3 y tener 10 dígitos. Puede incluir +57.";
-    }
+    const codeErr = validateUniversityCode(universityCode);
+    if (codeErr) return codeErr;
+
+    const nameErr = validateName(first_name, "El nombre");
+    if (nameErr) return nameErr;
+
+    const lastNameErr = validateName(last_name, "El apellido");
+    if (lastNameErr) return lastNameErr;
+
+    const phoneErr = validatePhone(phone);
+    if (phoneErr) return phoneErr;
+
     if (!uid) return "ID de usuario inválido. Inicia sesión nuevamente.";
+
     if (!isGoogle) {
-      if (!email?.trim()) return "El correo es obligatorio.";
-      if (!pass) return "La contraseña es obligatoria.";
+      const emailErr = validateEmail(email);
+      if (emailErr) return emailErr;
+
+      const passErr = validatePassword(pass);
+      if (passErr) return passErr;
     }
+
     return null;
   }
 
   function normalizePhoneCO(p: string): string {
-    const m = p.trim().match(CO_CELL_RE);
-    return m ? `+57${m[1]}${m[2]}${m[3]}` : p.trim();
+    // Remover espacios, guiones y +57, luego agregar +57 al inicio
+    const cleaned = p.replace(/[\s-+]/g, "").replace(/^57/, "");
+    if (cleaned.length === 10 && cleaned.startsWith("3")) {
+      return `+57${cleaned}`;
+    }
+    return p.trim();
   }
+
+  // Handlers con validación en tiempo real
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setEmail(value);
+    if (!isGoogle) {
+      const error = validateEmail(value);
+      setEmailError(error || "");
+    }
+  };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Solo permitir números
+    const value = e.target.value.replace(/\D/g, "");
+    // Limitar a 10 dígitos
+    const limited = value.slice(0, 10);
+    setUniversityCode(limited);
+    const error = validateUniversityCode(limited);
+    setCodeError(error || "");
+  };
+
+  const handleFirstNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Solo permitir letras y espacios
+    const filtered = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, "");
+    setFirst(filtered);
+    const error = validateName(filtered, "El nombre");
+    setNameError(error || "");
+  };
+
+  const handleLastNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Solo permitir letras y espacios
+    const filtered = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, "");
+    setLast(filtered);
+    const error = validateName(filtered, "El apellido");
+    setLastNameError(error || "");
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Solo permitir números, espacios, guiones y +
+    const value = e.target.value.replace(/[^\d\s-+]/g, "");
+    // Limitar a 13 caracteres máximo (incluyendo +57)
+    const limited = value.slice(0, 13);
+    setPhone(limited);
+    const error = validatePhone(limited);
+    setPhoneError(error || "");
+  };
+
+  const handlePassChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setPass(value);
+    if (!isGoogle) {
+      const error = validatePassword(value);
+      setPassError(error || "");
+    }
+  };
 
   async function handleSubmit() {
     setErr("");
@@ -157,25 +301,26 @@ function CreateUserForm() {
       let uid = auth.currentUser?.uid || (isGoogle ? (uidParam || null) : null);
       let mail = (email || "").trim();
 
-      // Prevalidación básica
-      const preErrBasic =
-        !universityCode?.trim()
-          ? "El código de la universidad es obligatorio."
-          : !first_name?.trim()
-          ? "El nombre no puede ser nulo."
-          : !last_name?.trim()
-          ? "El apellido no puede ser nulo."
-          : !phone?.trim()
-          ? "El teléfono celular es obligatorio."
-          : !CO_CELL_RE.test(phone.trim())
-          ? "Celular inválido (Colombia)."
-          : !isGoogle && !mail
-          ? "El correo es obligatorio."
-          : !isGoogle && !pass
-          ? "La contraseña es obligatoria."
-          : null;
+      // Prevalidación con funciones de validación
+      const codeErr = validateUniversityCode(universityCode);
+      if (codeErr) throw new Error(codeErr);
 
-      if (preErrBasic) throw new Error(preErrBasic);
+      const nameErr = validateName(first_name, "El nombre");
+      if (nameErr) throw new Error(nameErr);
+
+      const lastNameErr = validateName(last_name, "El apellido");
+      if (lastNameErr) throw new Error(lastNameErr);
+
+      const phoneErr = validatePhone(phone);
+      if (phoneErr) throw new Error(phoneErr);
+
+      if (!isGoogle) {
+        const emailErr = validateEmail(mail);
+        if (emailErr) throw new Error(emailErr);
+
+        const passErr = validatePassword(pass);
+        if (passErr) throw new Error(passErr);
+      }
 
       if (!auth) {
         throw new Error("Firebase no está inicializado. Recarga la página.");
@@ -341,68 +486,103 @@ function CreateUserForm() {
 
           <label style={S.label}>Código de la universidad</label>
           <input
-            style={S.input}
+            style={{
+              ...S.input,
+              borderColor: codeError ? "#b00020" : "#ccc",
+            }}
             value={universityCode}
-            onChange={(e) => setUniversityCode(e.target.value)}
-            placeholder="Código institucional"
+            onChange={handleCodeChange}
+            placeholder="0000123456"
+            maxLength={10}
+            inputMode="numeric"
             required
           />
+          {codeError && <div style={S.fieldError}>{codeError}</div>}
 
           <label style={S.label}>Nombre</label>
           <input
-            style={S.input}
+            style={{
+              ...S.input,
+              borderColor: nameError ? "#b00020" : "#ccc",
+            }}
             value={first_name}
-            onChange={(e) => setFirst(e.target.value)}
+            onChange={handleFirstNameChange}
             placeholder="Tu nombre"
             required
           />
+          {nameError && <div style={S.fieldError}>{nameError}</div>}
 
           <label style={S.label}>Apellido</label>
           <input
-            style={S.input}
+            style={{
+              ...S.input,
+              borderColor: lastNameError ? "#b00020" : "#ccc",
+            }}
             value={last_name}
-            onChange={(e) => setLast(e.target.value)}
+            onChange={handleLastNameChange}
             placeholder="Apellido"
             required
           />
+          {lastNameError && <div style={S.fieldError}>{lastNameError}</div>}
 
           <label style={S.label}>Correo</label>
           <input
-            style={S.input}
+            style={{
+              ...S.input,
+              borderColor: emailError ? "#b00020" : "#ccc",
+              backgroundColor: isGoogle ? "#f5f5f5" : "#fff",
+              cursor: isGoogle ? "not-allowed" : "text",
+            }}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={handleEmailChange}
             placeholder="correo@unisabana.edu.co"
             type="email"
+            readOnly={!isGoogle}
             disabled={isGoogle}
             required={!isGoogle}
           />
+          {emailError && !isGoogle && <div style={S.fieldError}>{emailError}</div>}
+          {!isGoogle && (
+            <div style={S.hint}>Solo se permiten correos @unisabana.edu.co</div>
+          )}
 
           {!isGoogle && (
             <>
               <label style={S.label}>Contraseña</label>
               <input
-                style={S.input}
+                style={{
+                  ...S.input,
+                  borderColor: passError ? "#b00020" : "#ccc",
+                }}
                 type="password"
                 value={pass}
-                onChange={(e) => setPass(e.target.value)}
+                onChange={handlePassChange}
                 placeholder="••••••••"
                 required
               />
+              {passError && <div style={S.fieldError}>{passError}</div>}
+              <div style={S.hint}>
+                Mínimo 8 caracteres, debe incluir mayúscula, minúscula y número
+              </div>
             </>
           )}
 
           <label style={S.label}>Teléfono celular (Colombia)</label>
           <input
-            style={S.input}
+            style={{
+              ...S.input,
+              borderColor: phoneError ? "#b00020" : "#ccc",
+            }}
             type="tel"
             inputMode="numeric"
-            pattern="^(\+57\s*)?(3\d{2})[\s-]?(\d{3})[\s-]?(\d{4})$"
-            title="10 dígitos iniciando en 3. Puede incluir +57."
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+57 3xx xxx xxxx"
+            onChange={handlePhoneChange}
+            placeholder="3123456789"
+            maxLength={13}
             required
           />
+          {phoneError && <div style={S.fieldError}>{phoneError}</div>}
+          <div style={S.hint}>Debe iniciar con 3 y tener 10 dígitos</div>
 
           {err && <div style={S.error}>{err}</div>}
           {ok && <div style={S.ok}>{ok}</div>}
@@ -570,6 +750,18 @@ const S = {
     borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
+  },
+  fieldError: {
+    color: "#b00020",
+    fontSize: 12,
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  hint: {
+    color: "#6b7280",
+    fontSize: 12,
+    marginTop: -4,
+    marginBottom: 4,
   },
 };
 
