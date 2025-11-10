@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { ensureValidToken } from "@/lib/auth";
+import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 
 interface Coordinates {
   lat: number;
@@ -69,8 +70,11 @@ export default function TripCreatePage() {
   const [availableTrips, setAvailableTrips] = useState<any[]>([]);
   const [availableTripsLoading, setAvailableTripsLoading] = useState(false);
   const [availableTripsError, setAvailableTripsError] = useState<string | null>(null);
+  const [roleMode, setRoleMode] = useState<"driver" | "passenger">("driver");
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const isPassenger = roleMode === "passenger";
+  const canPublishTrip = !isPassenger && !posting;
 
   // Cargar borrador de viaje almacenado en sessionStorage
   useEffect(() => {
@@ -157,52 +161,52 @@ export default function TripCreatePage() {
     loadData();
   }, [router]);
 
-  useEffect(() => {
-    const fetchAvailableTrips = async () => {
-      if (!tripInitialized || !tripFromCoord || !tripToCoord || !tripDate) {
-        setAvailableTrips([]);
-        setAvailableTripsError(null);
+  const fetchAvailableTrips = useCallback(async () => {
+    if (!tripInitialized || !tripFromCoord || !tripToCoord || !tripDate) {
+      setAvailableTrips([]);
+      setAvailableTripsError(null);
+      return;
+    }
+
+    try {
+      setAvailableTripsLoading(true);
+      setAvailableTripsError(null);
+      const token = await ensureValidToken();
+      if (!token) {
+        router.replace("/pages/login");
         return;
       }
 
-      try {
-        setAvailableTripsLoading(true);
-        setAvailableTripsError(null);
-        const token = await ensureValidToken();
-        if (!token) {
-          router.replace("/pages/login");
-          return;
-        }
+      const params = new URLSearchParams({
+        search: "true",
+        fromLat: String(tripFromCoord.lat),
+        fromLng: String(tripFromCoord.lng),
+        toLat: String(tripToCoord.lat),
+        toLng: String(tripToCoord.lng),
+        date: tripDate,
+      });
 
-        const params = new URLSearchParams({
-          search: "true",
-          fromLat: String(tripFromCoord.lat),
-          fromLng: String(tripFromCoord.lng),
-          toLat: String(tripToCoord.lat),
-          toLng: String(tripToCoord.lng),
-          date: tripDate,
-        });
-
-        if (tripTime) {
-          params.set("time", tripTime);
-        }
-
-        const response = await api.get(`/api/trips?${params.toString()}`, token);
-        if (response && Array.isArray(response.trips)) {
-          setAvailableTrips(response.trips);
-        } else {
-          setAvailableTrips([]);
-        }
-      } catch (searchError: any) {
-        console.error("Error searching trips:", searchError);
-        setAvailableTripsError(searchError?.message || "No se pudieron cargar los viajes disponibles");
-      } finally {
-        setAvailableTripsLoading(false);
+      if (tripTime) {
+        params.set("time", tripTime);
       }
-    };
 
-    fetchAvailableTrips();
+      const response = await api.get(`/api/trips?${params.toString()}`, token);
+      if (response && Array.isArray(response.trips)) {
+        setAvailableTrips(response.trips);
+      } else {
+        setAvailableTrips([]);
+      }
+    } catch (searchError: any) {
+      console.error("Error searching trips:", searchError);
+      setAvailableTripsError(searchError?.message || "No se pudieron cargar los viajes disponibles");
+    } finally {
+      setAvailableTripsLoading(false);
+    }
   }, [tripInitialized, tripFromCoord, tripToCoord, tripDate, tripTime, router]);
+
+  useEffect(() => {
+    fetchAvailableTrips();
+  }, [fetchAvailableTrips]);
 
   const userName = useMemo(() => {
     if (!userData) return "Usuario";
@@ -265,6 +269,13 @@ export default function TripCreatePage() {
   };
 
   const handleOpenVehicleModal = () => {
+    if (!canPublishTrip) {
+      if (isPassenger) {
+        setError("Cambia a modo conductor para publicar un viaje");
+      }
+      return;
+    }
+
     setFeedback(null);
     setError(null);
     setSelectedVehicle(null);
@@ -291,6 +302,10 @@ export default function TripCreatePage() {
   };
 
   const handleCreateTrip = async () => {
+    if (!canPublishTrip) {
+      return;
+    }
+
     if (!tripInitialized || !userData || !selectedVehicle) {
       return;
     }
@@ -377,18 +392,13 @@ export default function TripCreatePage() {
       const response = await api.post("/api/trips", payload, token);
 
       if (response && response.trip_id) {
-        sessionStorage.removeItem(TRIP_DRAFT_STORAGE_KEY);
         setFeedback("Viaje publicado correctamente");
         setShowVehicleModal(false);
         setSelectedVehicle(null);
         setFare("");
         setSeats("");
         setExtraMinutes("");
-
-        // Redirigir después de un breve delay para mostrar feedback
-        setTimeout(() => {
-          router.replace("/pages/login/landing");
-        }, 1200);
+        await fetchAvailableTrips();
       } else {
         setError("No se pudo crear el viaje. Intenta nuevamente");
       }
@@ -425,14 +435,40 @@ export default function TripCreatePage() {
     <div style={styles.page}>
       <div style={styles.container}>
         <header style={styles.header}>
-          <div style={styles.brandSection}>
-            <div style={styles.brand}>MoveTogether</div>
-            <div style={styles.tripTag}>Route</div>
-          </div>
+          <button
+            type="button"
+            style={styles.brandButton}
+            onClick={() => router.push("/pages/login/landing")}
+          >
+            <span style={styles.brand}>MoveTogether</span>
+            <span style={styles.tripTag}>Route</span>
+          </button>
           <div style={styles.controlsRow}>
-            <div style={styles.roleToggle}>
-              <button style={{ ...styles.roleBtn, ...styles.activeRole }}>Driver</button>
-              <button style={{ ...styles.roleBtn, color: "#9ca3af" }} disabled>
+            <div style={styles.roleSwitch} role="group" aria-label="Modo de uso">
+              <div
+                style={{
+                  ...styles.roleSwitchThumb,
+                  transform: roleMode === "driver" ? "translateX(0)" : "translateX(100%)",
+                }}
+              />
+              <button
+                type="button"
+                style={{
+                  ...styles.roleSwitchButton,
+                  color: roleMode === "driver" ? "#ffffff" : "#475569",
+                }}
+                onClick={() => setRoleMode("driver")}
+              >
+                Driver
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.roleSwitchButton,
+                  color: roleMode === "passenger" ? "#ffffff" : "#475569",
+                }}
+                onClick={() => setRoleMode("passenger")}
+              >
                 Passenger
               </button>
             </div>
@@ -458,7 +494,21 @@ export default function TripCreatePage() {
           <div style={styles.tripRow}>
             <div style={styles.locationCard}>
               <div style={styles.locationLabel}>From</div>
-              <div style={styles.locationValue}>{tripFrom || "—"}</div>
+              <PlaceAutocomplete
+                value={tripFrom}
+                onChange={(value) => {
+                  setTripFrom(value);
+                  if (!value) {
+                    setTripFromCoord(null);
+                  }
+                }}
+                onSelect={(selection) => {
+                  setTripFrom(selection.address);
+                  setTripFromCoord({ lat: selection.lat, lng: selection.lng });
+                }}
+                placeholder="Selecciona el origen"
+                disabled={posting}
+              />
             </div>
             <div style={styles.switchWrapper}>
               <button
@@ -477,7 +527,21 @@ export default function TripCreatePage() {
             </div>
             <div style={styles.locationCard}>
               <div style={styles.locationLabel}>To</div>
-              <div style={styles.locationValue}>{tripTo || "—"}</div>
+              <PlaceAutocomplete
+                value={tripTo}
+                onChange={(value) => {
+                  setTripTo(value);
+                  if (!value) {
+                    setTripToCoord(null);
+                  }
+                }}
+                onSelect={(selection) => {
+                  setTripTo(selection.address);
+                  setTripToCoord({ lat: selection.lat, lng: selection.lng });
+                }}
+                placeholder="Selecciona el destino"
+                disabled={posting}
+              />
             </div>
             <div style={styles.timeCard}>
               <div style={styles.dateTimeRow}>
@@ -513,9 +577,17 @@ export default function TripCreatePage() {
               </div>
             </div>
             <button
-              style={styles.addTripBtn}
+              style={{
+                ...styles.addTripBtn,
+                ...(canPublishTrip ? {} : styles.addTripBtnDisabled),
+              }}
               onClick={handleOpenVehicleModal}
-              title="Seleccionar vehículo"
+              title={
+                canPublishTrip
+                  ? "Seleccionar vehículo"
+                  : "Cambia a modo conductor para publicar"
+              }
+              disabled={!canPublishTrip}
             >
               <span style={styles.addTripBtnIcon}>+</span>
             </button>
@@ -568,7 +640,16 @@ export default function TripCreatePage() {
                       <div>Asientos libres: {trip.seats}</div>
                       <div>Extra minutos: {trip.extra_minutes || 0}</div>
                     </div>
-                    <button style={styles.availableAction} onClick={() => alert("Funcionalidad para solicitar viaje próximamente")}>Aplicar al viaje</button>
+                    <button
+                      style={{
+                        ...styles.availableAction,
+                        ...(isPassenger ? {} : styles.availableActionDisabled),
+                      }}
+                      onClick={() => alert("Funcionalidad para solicitar viaje próximamente")}
+                      disabled={!isPassenger}
+                    >
+                      Aplicar al viaje
+                    </button>
                   </div>
                 ))}
               </div>
@@ -743,10 +824,15 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
   },
-  brandSection: {
+  brandButton: {
     display: "flex",
     alignItems: "center",
     gap: 12,
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    transition: "transform 0.2s ease",
   },
   brand: {
     fontSize: 22,
@@ -767,26 +853,42 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 24,
   },
-  roleToggle: {
-    display: "flex",
-    background: "#e5e7eb",
+  roleSwitch: {
+    position: "relative",
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    alignItems: "center",
+    background: "#d1d5db",
     borderRadius: 999,
     padding: 4,
+    width: 200,
+    overflow: "hidden",
+    boxShadow: "inset 0 1px 1px rgba(255,255,255,0.6)",
   },
-  roleBtn: {
+  roleSwitchThumb: {
+    position: "absolute",
+    top: 4,
+    bottom: 4,
+    left: 4,
+    width: "calc(50% - 4px)",
+    borderRadius: 999,
+    background: "#0f2230",
+    boxShadow: "0 8px 20px rgba(15,34,48,0.3)",
+    transition: "transform 0.25s ease",
+    zIndex: 0,
+  },
+  roleSwitchButton: {
+    position: "relative",
+    zIndex: 1,
     border: "none",
     background: "transparent",
-    padding: "6px 16px",
+    padding: "6px 0",
     borderRadius: 999,
     fontSize: 12,
     fontWeight: 600,
-    color: "#0f2230",
-    cursor: "default",
-  },
-  activeRole: {
-    background: "#0f2230",
-    color: "#fff",
-    boxShadow: "0 6px 16px rgba(15,34,48,0.25)",
+    cursor: "pointer",
+    textTransform: "capitalize",
+    transition: "color 0.2s ease",
   },
   userInfo: {
     display: "flex",
@@ -941,6 +1043,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 24,
     transition: "transform 0.2s ease",
   },
+  addTripBtnDisabled: {
+    background: "#1e293b",
+    opacity: 0.45,
+    cursor: "not-allowed",
+    boxShadow: "none",
+  },
   addTripBtnIcon: {
     lineHeight: 0,
     marginTop: -3,
@@ -1058,6 +1166,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
     justifySelf: "flex-end",
+  },
+  availableActionDisabled: {
+    background: "#cbd5e1",
+    color: "#64748b",
+    cursor: "not-allowed",
   },
   modalOverlay: {
     position: "fixed",
