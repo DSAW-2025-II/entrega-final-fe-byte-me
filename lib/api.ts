@@ -17,7 +17,7 @@ const getApiUrl = () => {
   return "https://movetogether2-back.vercel.app";
 };
 
-const API_URL = getApiUrl();
+export const API_URL = getApiUrl();
 
 export const api = {
   async request(endpoint: string, options: RequestInit = {}) {

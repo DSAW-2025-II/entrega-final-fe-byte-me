@@ -2,6 +2,8 @@
  * Utilidades para manejo de autenticación y tokens
  */
 
+import { API_URL } from "./api";
+
 const TOKEN_KEY = "idToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
 const TOKEN_EXPIRY_KEY = "tokenExpiry";
@@ -59,7 +61,6 @@ export function isTokenExpired(): boolean {
  */
 export async function verifyToken(token: string): Promise<boolean> {
   try {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
     const response = await fetch(`${API_URL}/api/auth/verify`, {
       method: "POST",
       headers: {
