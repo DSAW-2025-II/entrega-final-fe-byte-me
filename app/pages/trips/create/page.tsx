@@ -190,6 +190,8 @@ export default function TripCreatePage() {
         params.set("time", tripTime);
       }
 
+      params.set("viewerRole", roleMode);
+
       const response = await api.get(`/api/trips?${params.toString()}`, token);
       if (response && Array.isArray(response.trips)) {
         setAvailableTrips(response.trips);
@@ -202,7 +204,7 @@ export default function TripCreatePage() {
     } finally {
       setAvailableTripsLoading(false);
     }
-  }, [tripInitialized, tripFromCoord, tripToCoord, tripDate, tripTime, router]);
+  }, [tripInitialized, tripFromCoord, tripToCoord, tripDate, tripTime, router, roleMode]);
 
   useEffect(() => {
     fetchAvailableTrips();
