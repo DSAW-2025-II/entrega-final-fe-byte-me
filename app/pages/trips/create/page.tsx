@@ -94,17 +94,8 @@ export default function TripCreatePage() {
   }, [user, role, canBeDriver]);
   const hasAnyVehicle = useMemo(() => vehicles.length > 0, [vehicles]);
 
-  // Validar que el botón + se habilite solo si está en modo conductor y tiene datos completos
-  const canPublishTrip = !isPassenger && 
-    !posting && 
-    tripDate && 
-    tripTime && 
-    tripFrom && 
-    tripTo && 
-    tripFromCoord && 
-    tripToCoord &&
-    role === "driver" &&
-    hasAnyVehicle;
+  // El botón solo depende del modo driver y de tener vehículos (las validaciones de campos viven en handleOpenVehicleModal)
+  const canPublishTrip = !posting && roleMode === "driver" && hasAnyVehicle;
 
   // Cargar borrador de viaje almacenado en sessionStorage
   useEffect(() => {
@@ -710,15 +701,7 @@ export default function TripCreatePage() {
                   
                   const vehiclesResp = await api.get("/api/vehicles", token);
                   const freshVehicles = Array.isArray(vehiclesResp?.vehicles) ? vehiclesResp.vehicles : [];
-                  const freshCanPublish = !isPassenger && 
-                    !posting && 
-                    tripDate && 
-                    tripTime && 
-                    tripFrom && 
-                    tripTo && 
-                    tripFromCoord && 
-                    tripToCoord &&
-                    freshVehicles.length > 0;
+                  const freshCanPublish = roleMode === "driver" && !posting && freshVehicles.length > 0;
                   
                   if (freshCanPublish) {
                     setVehicles(freshVehicles);
@@ -726,6 +709,8 @@ export default function TripCreatePage() {
                   } else {
                     if (isPassenger) {
                       alert("Cambia a modo conductor para publicar");
+                    } else if (freshVehicles.length === 0) {
+                      alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
                     } else if (freshVehicles.length === 0) {
                       alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
                     } else if (!tripFrom || !tripTo) {
@@ -743,30 +728,13 @@ export default function TripCreatePage() {
                   alert("Error al verificar tus permisos. Intenta nuevamente.");
                 }
               }}
-              title={(() => {
-                if (isPassenger) {
-                  return "Cambia a modo conductor para publicar";
-                }
-                if (role !== "driver") {
-                  return "Debes estar en modo conductor para publicar viajes";
-                }
-                if (!hasAnyVehicle) {
-                  return "Registra un vehículo en 'My Car' primero";
-                }
-                if (!tripFrom || !tripTo) {
-                  return "Completa origen y destino";
-                }
-                if (!tripFromCoord || !tripToCoord) {
-                  return "Selecciona las coordenadas en el mapa";
-                }
-                if (!tripDate) {
-                  return "Selecciona la fecha del viaje";
-                }
-                if (!tripTime) {
-                  return "Selecciona la hora del viaje";
-                }
-                return "Seleccionar vehículo";
-              })()}
+              title={
+                roleMode !== "driver"
+                  ? "Cambia a modo conductor para publicar"
+                  : !hasAnyVehicle
+                  ? "Registra un vehículo en 'My Car' primero"
+                  : "Seleccionar vehículo"
+              }
               disabled={!canPublishTrip}
             >
               <span style={styles.addTripBtnIcon}>+</span>
