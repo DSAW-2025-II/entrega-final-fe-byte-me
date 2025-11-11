@@ -9,6 +9,7 @@ interface User {
   first_name?: string;
   last_name?: string;
   email?: string;
+  phone?: string;
   user_photo?: string | null;
   is_driver?: boolean;
   birth_date?: string;
