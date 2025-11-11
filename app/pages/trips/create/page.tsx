@@ -77,7 +77,7 @@ export default function TripCreatePage() {
   const isPassenger = roleMode === "passenger";
   
   // Determinar si el usuario puede ser conductor basado en el contexto
-  const canBeDriver = user?.hasCar === true;
+  const canBeDriver = true;
   
   // Debug: mostrar estado del usuario
   useEffect(() => {
@@ -101,8 +101,7 @@ export default function TripCreatePage() {
     tripTo && 
     tripFromCoord && 
     tripToCoord &&
-    role === "driver" &&
-    user?.hasCar === true;
+    role === "driver";
 
   // Cargar borrador de viaje almacenado en sessionStorage
   useEffect(() => {
@@ -533,18 +532,14 @@ export default function TripCreatePage() {
                     if (token) {
                       const freshUserData = await api.get("/api/me", token);
                       if (freshUserData) {
-                        const freshCanBeDriver = freshUserData.hasCar === true;
+                        const freshCanBeDriver = true;
                         
                         if (freshCanBeDriver) {
                           setRoleMode("driver");
                           // Actualizar el contexto también
                           await refreshUser();
                         } else {
-                          if (!freshUserData.hasCar) {
-                            alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
-                          } else {
-                            alert("No puedes usar el modo conductor en este momento.");
-                          }
+                          alert("No puedes usar el modo conductor en este momento.");
                         }
                       }
                     }
@@ -555,9 +550,7 @@ export default function TripCreatePage() {
                 }}
                 title={
                   !canBeDriver
-                    ? !user?.hasCar
-                      ? "Registra un vehículo en 'My Car' primero"
-                      : "No puedes usar el modo conductor"
+                    ? "No puedes usar el modo conductor"
                     : "Modo conductor"
                 }
               >
@@ -710,15 +703,14 @@ export default function TripCreatePage() {
                   const freshUserData = await api.get("/api/me", token);
                   if (freshUserData) {
                     // Recalcular canPublishTrip con datos frescos
-                    const freshCanPublish = !isPassenger && 
+                      const freshCanPublish = !isPassenger && 
                       !posting && 
                       tripDate && 
                       tripTime && 
                       tripFrom && 
                       tripTo && 
                       tripFromCoord && 
-                      tripToCoord &&
-                      freshUserData.hasCar === true;
+                      tripToCoord;
                     
                     if (freshCanPublish) {
                       handleOpenVehicleModal();
@@ -726,8 +718,6 @@ export default function TripCreatePage() {
                       // Mostrar mensaje según lo que falte
                       if (isPassenger) {
                         alert("Cambia a modo conductor para publicar");
-                      } else if (!freshUserData.hasCar) {
-                        alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
                       } else if (!tripFrom || !tripTo) {
                         alert("Completa origen y destino");
                       } else if (!tripFromCoord || !tripToCoord) {
@@ -750,9 +740,6 @@ export default function TripCreatePage() {
                 }
                 if (role !== "driver") {
                   return "Debes estar en modo conductor para publicar viajes";
-                }
-                if (!user?.hasCar) {
-                  return "Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.";
                 }
                 if (!tripFrom || !tripTo) {
                   return "Completa origen y destino";
