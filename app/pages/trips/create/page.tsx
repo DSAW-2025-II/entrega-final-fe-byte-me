@@ -596,9 +596,8 @@ export default function TripCreatePage() {
           </div>
 
           <div style={styles.tripBody}>
-            {feedback ? (
-              <div style={styles.feedback}>{feedback}</div>
-            ) : availableTripsLoading ? (
+            {feedback && <div style={styles.feedback}>{feedback}</div>}
+            {availableTripsLoading ? (
               <div style={styles.placeholder}>Buscando viajes compatibles…</div>
             ) : availableTripsError ? (
               <div style={styles.errorBox}>{availableTripsError}</div>
