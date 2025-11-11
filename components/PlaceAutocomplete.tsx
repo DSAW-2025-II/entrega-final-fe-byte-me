@@ -191,12 +191,14 @@ export default function PlaceAutocomplete({
         disabled={disabled || !googleReady}
         style={{
           width: "100%",
-          height: 44,
-          borderRadius: 6,
-          border: "1px solid #ddd",
-          background: disabled ? "#f5f5f5" : "#fff",
-          padding: "0 14px",
+          height: "100%",
+          borderRadius: 0,
+          border: "none",
+          background: "transparent",
+          padding: 0,
           fontSize: 14,
+          color: "#111827",
+          fontWeight: 500,
           outline: "none",
           cursor: disabled ? "not-allowed" : "text",
         }}

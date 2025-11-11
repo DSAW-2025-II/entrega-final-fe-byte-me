@@ -729,7 +729,9 @@ const S = {
   },
   input: {
     height: 44,
-    border: "1px solid #ccc",
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#ccc",
     borderRadius: 8,
     padding: "0 14px",
     fontSize: 15,

@@ -123,7 +123,13 @@ export default function LandingPage() {
               alignItems: "center",
               gap: 8,
             }}
-            onClick={() => router.push("/pages/user")}
+            onClick={() => {
+              // Guardar origen en sessionStorage antes de ir al perfil
+              if (typeof window !== "undefined") {
+                sessionStorage.setItem("profile_return_path", "/pages/login/landing");
+              }
+              router.push("/pages/user");
+            }}
             title="Ver perfil"
           >
             <div style={styles.userAvatarContainer}>
@@ -615,7 +621,9 @@ const styles: { [k: string]: React.CSSProperties } = {
     flex: 1,
     padding: "8px 12px",
     borderRadius: 6,
-    border: "1px solid #dee2e6",
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#dee2e6",
     background: "#fff",
     color: "#495057",
     fontSize: 13,
@@ -626,6 +634,8 @@ const styles: { [k: string]: React.CSSProperties } = {
   mapModeBtnActive: {
     background: "#0b1b27",
     color: "#fff",
+    borderStyle: "solid",
+    borderWidth: 1,
     borderColor: "#0b1b27",
   },
   coordsContainer: {

@@ -10,6 +10,7 @@ import { signOut } from "firebase/auth";
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { initializeFirebase } from "@/lib/firebase";
 import { useTheme } from "@/app/contexts/ThemeContext";
+import { useUser } from "@/app/contexts/UserContext";
 
 // Imagen por defecto del carro (usar la segunda imagen proporcionada)
 const DEFAULT_CAR_IMAGE = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800&h=600&fit=crop";
@@ -29,6 +30,7 @@ interface Vehicle {
 export default function MyCarPage() {
   const router = useRouter();
   const { theme, language } = useTheme();
+  const { refreshUser, setUser, setRole } = useUser();
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -43,6 +45,14 @@ export default function MyCarPage() {
   });
   const [uploading, setUploading] = useState(false);
   const [userName, setUserName] = useState("");
+  const [isDriver, setIsDriver] = useState(false);
+  const [showDriverRegistration, setShowDriverRegistration] = useState(false);
+  const [driverFormData, setDriverFormData] = useState({
+    birth_date: "",
+    id_number: "",
+  });
+  const [registeringDriver, setRegisteringDriver] = useState(false);
+  const [driverRegistered, setDriverRegistered] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -80,6 +90,13 @@ export default function MyCarPage() {
           ? `${first} ${last}`.trim()
           : (userData.email ? userData.email.split("@")[0] : "User");
         setUserName(full);
+        setIsDriver(userData.is_driver || false);
+        
+        // Si no es conductor y quiere agregar un carro, mostrar registro de conductor
+        if (!userData.is_driver && showAddForm) {
+          setShowDriverRegistration(true);
+          setShowAddForm(false);
+        }
       }
     } catch (error) {
       console.error("Error fetching user data:", error);
@@ -102,6 +119,121 @@ export default function MyCarPage() {
       console.error("Error fetching vehicles:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRegisterDriver = async () => {
+    const messages = {
+      es: {
+        completeFields: "Por favor completa todos los campos",
+        idNumberFormat: "La cédula debe contener solo números y tener al menos 7 dígitos",
+        futureDate: "La fecha de nacimiento debe ser en el pasado",
+        ageRequirement: "Debes ser mayor de 18 años para ser conductor",
+        error: "Error al registrarse como conductor. Intenta nuevamente.",
+        success: "¡Ahora eres conductor! Puedes agregar tu vehículo.",
+      },
+      en: {
+        completeFields: "Please complete all fields",
+        idNumberFormat: "ID number must contain only numbers and have at least 7 digits",
+        futureDate: "Birth date must be in the past",
+        ageRequirement: "You must be over 18 years old to be a driver",
+        error: "Error registering as driver. Please try again.",
+        success: "You are now a driver! You can add your vehicle.",
+      },
+    };
+
+    const t = messages[language];
+
+    if (!driverFormData.birth_date || !driverFormData.id_number) {
+      alert(t.completeFields);
+      return;
+    }
+
+    // Validar formato de cédula (solo números, mínimo 7 dígitos)
+    const idNumberRegex = /^\d{7,}$/;
+    if (!idNumberRegex.test(driverFormData.id_number.trim())) {
+      alert(t.idNumberFormat);
+      return;
+    }
+
+    // Validar fecha de nacimiento (debe ser en el pasado)
+    const birthDate = new Date(driverFormData.birth_date);
+    const today = new Date();
+    if (birthDate >= today) {
+      alert(t.futureDate);
+      return;
+    }
+
+    // Calcular edad (debe ser mayor de 18 años)
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    if (age < 18) {
+      alert(t.ageRequirement);
+      return;
+    }
+
+    setRegisteringDriver(true);
+
+    try {
+      const validToken = await ensureValidToken();
+      if (!validToken) {
+        router.push("/pages/login");
+        return;
+      }
+
+      // Obtener datos del usuario actual para enviarlos junto con la actualización
+      const currentUserData = await api.get("/api/me", validToken);
+      
+      const response = await api.post(
+        "/api/auth/register",
+        {
+          // Incluir campos requeridos para que el backend detecte que es una actualización
+          first_name: currentUserData?.first_name || "",
+          last_name: currentUserData?.last_name || "",
+          user_id: currentUserData?.user_id || "",
+          phone: currentUserData?.phone || "",
+          email: currentUserData?.email || "",
+          // Campos de actualización a conductor
+          is_driver: true,
+          birth_date: driverFormData.birth_date,
+          id_number: driverFormData.id_number.trim(),
+        },
+        validToken
+      );
+
+      if (response) {
+        setIsDriver(true);
+        setShowDriverRegistration(false);
+        setDriverRegistered(true);
+        setDriverFormData({ birth_date: "", id_number: "" });
+        
+        // Refrescar datos del usuario en el contexto
+        await refreshUser();
+        
+        // Después de 3 segundos, mostrar el formulario de agregar carro
+        setTimeout(() => {
+          setDriverRegistered(false);
+          setShowAddForm(true);
+        }, 3000);
+      }
+    } catch (error: any) {
+      console.error("Error registering as driver:", error);
+      // Usar el mensaje de error ya definido arriba
+      const messages = {
+        es: {
+          error: "Error al registrarse como conductor. Intenta nuevamente.",
+        },
+        en: {
+          error: "Error registering as driver. Please try again.",
+        },
+      };
+      const t = messages[language];
+      alert(error?.message || t.error);
+    } finally {
+      setRegisteringDriver(false);
     }
   };
 
@@ -233,6 +365,22 @@ export default function MyCarPage() {
       );
 
       if (response) {
+        // ✅ CLAVE: Si el backend devuelve el usuario actualizado, usarlo directamente
+        if (response.user) {
+          setUser(response.user);
+          if (response.user.roles?.includes("driver") && response.user.hasCar) {
+            setRole("driver");
+          }
+          console.log("✅ Usuario actualizado después de guardar vehículo:", {
+            roles: response.user.roles,
+            hasCar: response.user.hasCar,
+            is_driver: response.user.is_driver,
+          });
+        } else {
+          // Fallback: refrescar desde el backend
+          await refreshUser();
+        }
+
         alert("Vehículo registrado correctamente");
         setShowAddForm(false);
         setFormData({
@@ -373,8 +521,14 @@ export default function MyCarPage() {
               }}>My cars</h2>
               <button
                 style={styles.addBtn}
-                onClick={() => setShowAddForm(true)}
-                title="Agregar carro"
+                onClick={() => {
+                  if (!isDriver) {
+                    setShowDriverRegistration(true);
+                  } else {
+                    setShowAddForm(true);
+                  }
+                }}
+                title={isDriver ? "Agregar carro" : "Registrarse como conductor"}
               >
                 <span style={styles.addIcon}>+</span>
               </button>
@@ -387,9 +541,15 @@ export default function MyCarPage() {
                 <div style={styles.emptyText}>No tienes carros registrados</div>
                 <button
                   style={styles.emptyBtn}
-                  onClick={() => setShowAddForm(true)}
+                  onClick={() => {
+                    if (!isDriver) {
+                      setShowDriverRegistration(true);
+                    } else {
+                      setShowAddForm(true);
+                    }
+                  }}
                 >
-                  Agregar mi primer carro
+                  {isDriver ? "Agregar mi primer carro" : "Registrarse como conductor"}
                 </button>
               </div>
             ) : (
@@ -685,6 +845,113 @@ export default function MyCarPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE REGISTRO DE CONDUCTOR */}
+      {showDriverRegistration && (
+        <div style={styles.modal}>
+          <div style={styles.modalContent}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Registrarse como conductor</h3>
+              <button
+                style={styles.modalClose}
+                onClick={() => {
+                  setShowDriverRegistration(false);
+                  setDriverFormData({ birth_date: "", id_number: "" });
+                }}
+                disabled={registeringDriver}
+              >
+                ✕
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleRegisterDriver();
+              }}
+              style={styles.form}
+            >
+              <div style={styles.formField}>
+                <label style={styles.formLabel}>
+                  Fecha de nacimiento *
+                </label>
+                <input
+                  type="date"
+                  value={driverFormData.birth_date}
+                  onChange={(e) =>
+                    setDriverFormData({
+                      ...driverFormData,
+                      birth_date: e.target.value,
+                    })
+                  }
+                  style={styles.formInput}
+                  max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                  required
+                />
+                <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                  Debes ser mayor de 18 años
+                </div>
+              </div>
+              <div style={styles.formField}>
+                <label style={styles.formLabel}>
+                  Cédula *
+                </label>
+                <input
+                  type="text"
+                  value={driverFormData.id_number}
+                  onChange={(e) => {
+                    // Solo permitir números
+                    const value = e.target.value.replace(/\D/g, '');
+                    setDriverFormData({
+                      ...driverFormData,
+                      id_number: value,
+                    });
+                  }}
+                  style={styles.formInput}
+                  placeholder="Ej: 1234567890"
+                  maxLength={15}
+                  required
+                />
+                <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                  Solo números, mínimo 7 dígitos
+                </div>
+              </div>
+              <div style={styles.formActions}>
+                <button
+                  type="button"
+                  style={styles.cancelBtn}
+                  onClick={() => {
+                    setShowDriverRegistration(false);
+                    setDriverFormData({ birth_date: "", id_number: "" });
+                  }}
+                  disabled={registeringDriver}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  style={styles.submitBtn}
+                  disabled={registeringDriver}
+                >
+                  {registeringDriver ? "Registrando..." : "Registrarse como conductor"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MENSAJE DE ÉXITO AL REGISTRARSE COMO CONDUCTOR */}
+      {driverRegistered && (
+        <div style={styles.successModal}>
+          <div style={styles.successContent}>
+            <div style={styles.successIcon}>✅</div>
+            <div style={styles.successTitle}>¡Ahora eres conductor!</div>
+            <div style={styles.successText}>
+              Ya puedes registrar tu vehículo y comenzar a ofrecer viajes.
+            </div>
           </div>
         </div>
       )}
@@ -1048,6 +1315,38 @@ const styles: any = {
     cursor: "pointer",
     width: "100%",
     transition: "background-color 0.2s",
+  },
+  successModal: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.5)",
+    display: "grid",
+    placeItems: "center",
+    zIndex: 2000,
+    padding: 20,
+  },
+  successContent: {
+    background: "#fff",
+    borderRadius: 16,
+    padding: "32px 24px",
+    textAlign: "center",
+    maxWidth: 400,
+    boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+  },
+  successIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 700,
+    color: "#0f2230",
+    marginBottom: 12,
+  },
+  successText: {
+    fontSize: 16,
+    color: "#475569",
+    lineHeight: 1.5,
   },
 };
 

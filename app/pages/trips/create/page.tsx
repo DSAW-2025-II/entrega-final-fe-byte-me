@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { ensureValidToken } from "@/lib/auth";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
+import { useUser } from "@/app/contexts/UserContext";
 
 interface Coordinates {
   lat: number;
@@ -45,6 +46,7 @@ const TRIP_DRAFT_STORAGE_KEY = "movetogether_tripDraft";
 
 export default function TripCreatePage() {
   const router = useRouter();
+  const { user, role, refreshUser } = useUser();
   const [draft, setDraft] = useState<TripDraft | null>(null);
   const [draftLoading, setDraftLoading] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -55,7 +57,6 @@ export default function TripCreatePage() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [fare, setFare] = useState("");
   const [seats, setSeats] = useState("");
-  const [extraMinutes, setExtraMinutes] = useState("");
   const [posting, setPosting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,11 +71,39 @@ export default function TripCreatePage() {
   const [availableTrips, setAvailableTrips] = useState<any[]>([]);
   const [availableTripsLoading, setAvailableTripsLoading] = useState(false);
   const [availableTripsError, setAvailableTripsError] = useState<string | null>(null);
-  const [roleMode, setRoleMode] = useState<"driver" | "passenger">("driver");
+  const [roleMode, setRoleMode] = useState<"driver" | "passenger">("passenger");
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const isPassenger = roleMode === "passenger";
-  const canPublishTrip = !isPassenger && !posting;
+  
+  // Determinar si el usuario puede ser conductor basado en el contexto
+  const canBeDriver = user?.roles?.includes("driver") === true && user?.hasCar === true;
+  
+  // Debug: mostrar estado del usuario
+  useEffect(() => {
+    console.log("🔍 User context in trips/create:", {
+      user: user ? {
+        uid: user.uid,
+        is_driver: user.is_driver,
+        roles: user.roles,
+        hasCar: user.hasCar,
+      } : null,
+      role,
+      canBeDriver,
+    });
+  }, [user, role, canBeDriver]);
+  // Validar que el botón + se habilite solo si role==='driver' && user.hasCar && 'driver'∈user.roles
+  const canPublishTrip = !isPassenger && 
+    !posting && 
+    tripDate && 
+    tripTime && 
+    tripFrom && 
+    tripTo && 
+    tripFromCoord && 
+    tripToCoord &&
+    role === "driver" &&
+    user?.hasCar === true &&
+    user?.roles?.includes("driver") === true;
 
   // Cargar borrador de viaje almacenado en sessionStorage
   useEffect(() => {
@@ -113,6 +142,11 @@ export default function TripCreatePage() {
     }
   }, [router]);
 
+  // Refrescar datos del usuario desde el contexto al cargar
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
+
   // Cargar datos del usuario y vehículos
   useEffect(() => {
     const loadData = async () => {
@@ -133,6 +167,8 @@ export default function TripCreatePage() {
               email: me.email,
               user_photo: me.user_photo,
             });
+            // Refrescar el contexto de usuario para asegurar datos actualizados
+            await refreshUser();
           }
         } catch (userError) {
           console.error("Error fetching user data:", userError);
@@ -271,10 +307,28 @@ export default function TripCreatePage() {
   };
 
   const handleOpenVehicleModal = () => {
-    if (!canPublishTrip) {
-      if (isPassenger) {
-        setError("Cambia a modo conductor para publicar un viaje");
-      }
+    if (isPassenger) {
+      setError("Cambia a modo conductor para publicar un viaje");
+      return;
+    }
+
+    if (!tripFrom || !tripTo) {
+      setError("Debes indicar origen y destino");
+      return;
+    }
+
+    if (!tripFromCoord || !tripToCoord) {
+      setError("Debes seleccionar las coordenadas del origen y destino");
+      return;
+    }
+
+    if (!tripDate) {
+      setError("Debes seleccionar la fecha del viaje");
+      return;
+    }
+
+    if (!tripTime) {
+      setError("Debes seleccionar la hora del viaje");
       return;
     }
 
@@ -283,7 +337,6 @@ export default function TripCreatePage() {
     setSelectedVehicle(null);
     setFare("");
     setSeats("");
-    setExtraMinutes("");
     setShowVehicleModal(true);
   };
 
@@ -293,7 +346,8 @@ export default function TripCreatePage() {
     setSelectedVehicle(null);
     setFare("");
     setSeats("");
-    setExtraMinutes("");
+    // Al cancelar, redirigir al landing
+    router.push("/pages/login/landing");
   };
 
   const handleSelectVehicle = (vehicle: Vehicle) => {
@@ -314,7 +368,6 @@ export default function TripCreatePage() {
 
     const seatsNumber = Number(seats);
     const fareNumber = Number(fare);
-    const extraMinutesNumber = extraMinutes ? Number(extraMinutes) : 0;
 
     if (!tripFrom || !tripTo) {
       setError("Debes indicar origen y destino");
@@ -328,11 +381,6 @@ export default function TripCreatePage() {
 
     if (!tripTime) {
       setError("Selecciona la hora del viaje");
-      return;
-    }
-
-    if (extraMinutes && (!Number.isFinite(extraMinutesNumber) || extraMinutesNumber < 0)) {
-      setError("Ingresa minutos extra válidos (0 o más)");
       return;
     }
 
@@ -382,7 +430,7 @@ export default function TripCreatePage() {
         time: tripTimeIso,
         seats: seatsNumber,
         fare: fareNumber,
-        extra_minutes: extraMinutesNumber,
+        extra_minutes: 0,
         vehicle: {
           vehicle_id: selectedVehicle.vehicle_id,
           license_plate: selectedVehicle.license_plate,
@@ -399,8 +447,12 @@ export default function TripCreatePage() {
         setSelectedVehicle(null);
         setFare("");
         setSeats("");
-        setExtraMinutes("");
-        await fetchAvailableTrips();
+        // Limpiar el borrador
+        sessionStorage.removeItem(TRIP_DRAFT_STORAGE_KEY);
+        // Redirigir al landing después de un breve delay
+        setTimeout(() => {
+          router.push("/pages/login/landing");
+        }, 1500);
       } else {
         setError("No se pudo crear el viaje. Intenta nuevamente");
       }
@@ -426,7 +478,14 @@ export default function TripCreatePage() {
         <div style={styles.loadingCard}>
           No encontramos los datos del viaje. Vuelve a planificarlo.
         </div>
-        <button style={styles.backBtn} onClick={() => router.replace("/pages/login/landing")}>
+        <button 
+          type="button"
+          style={styles.backBtn} 
+          onClick={(e) => {
+            e.preventDefault();
+            router.replace("/pages/login/landing");
+          }}
+        >
           Regresar al dashboard
         </button>
       </div>
@@ -437,14 +496,15 @@ export default function TripCreatePage() {
     <div style={styles.page}>
       <div style={styles.container}>
         <header style={styles.header}>
-          <button
-            type="button"
-            style={styles.brandButton}
-            onClick={() => router.push("/pages/login/landing")}
-          >
-            <span style={styles.brand}>MoveTogether</span>
-            <span style={styles.tripTag}>Route</span>
-          </button>
+          <div style={styles.headerLeft}>
+            <div 
+              style={styles.brandButton}
+              onClick={() => router.push("/pages/login/landing")}
+            >
+              <span style={styles.brand}>MoveTogether</span>
+              <span style={styles.tripTag}>Route</span>
+            </div>
+          </div>
           <div style={styles.controlsRow}>
             <div style={styles.roleSwitch} role="group" aria-label="Modo de uso">
               <div
@@ -458,8 +518,53 @@ export default function TripCreatePage() {
                 style={{
                   ...styles.roleSwitchButton,
                   color: roleMode === "driver" ? "#ffffff" : "#475569",
+                  opacity: !canBeDriver ? 0.5 : 1,
+                  cursor: !canBeDriver ? "not-allowed" : "pointer",
                 }}
-                onClick={() => setRoleMode("driver")}
+                onClick={async () => {
+                  // Revalidar siempre antes de validar - obtener datos frescos del backend
+                  await refreshUser();
+                  
+                  // Esperar un momento para que el estado se actualice
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  
+                  // Obtener datos frescos directamente del backend
+                  try {
+                    const token = await ensureValidToken();
+                    if (token) {
+                      const freshUserData = await api.get("/api/me", token);
+                      if (freshUserData) {
+                        const freshCanBeDriver = freshUserData.roles?.includes("driver") === true && freshUserData.hasCar === true;
+                        
+                        if (freshCanBeDriver) {
+                          setRoleMode("driver");
+                          // Actualizar el contexto también
+                          await refreshUser();
+                        } else {
+                          if (!freshUserData.roles?.includes("driver")) {
+                            alert("Debes registrarte como conductor primero. Ve a 'My Car' para registrarte.");
+                          } else if (!freshUserData.hasCar) {
+                            alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
+                          } else {
+                            alert("No puedes usar el modo conductor en este momento.");
+                          }
+                        }
+                      }
+                    }
+                  } catch (error) {
+                    console.error("Error revalidating user:", error);
+                    alert("Error al verificar tus permisos. Intenta nuevamente.");
+                  }
+                }}
+                title={
+                  !canBeDriver
+                    ? !user?.roles?.includes("driver")
+                      ? "Regístrate como conductor en 'My Car' primero"
+                      : !user?.hasCar
+                      ? "Registra un vehículo en 'My Car' primero"
+                      : "No puedes usar el modo conductor"
+                    : "Modo conductor"
+                }
               >
                 Driver
               </button>
@@ -474,7 +579,22 @@ export default function TripCreatePage() {
                 Passenger
               </button>
             </div>
-            <div style={styles.userInfo}>
+            <button
+              type="button"
+              style={styles.userInfoButton}
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("profile_return_path", "/pages/trips/create");
+                }
+                router.push("/pages/user");
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#f1f5f9";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
               <div style={styles.userAvatarContainer}>
                 {userData?.user_photo ? (
                   <Image
@@ -488,117 +608,201 @@ export default function TripCreatePage() {
                 )}
               </div>
               <span style={styles.userName}>{userName}</span>
-            </div>
+            </button>
           </div>
         </header>
 
         <section style={styles.tripCard}>
           <div style={styles.tripRow}>
             <div style={styles.locationCard}>
-              <div style={styles.locationLabel}>From</div>
-              <PlaceAutocomplete
-                value={tripFrom}
-                onChange={(value) => {
-                  setTripFrom(value);
-                  if (!value) {
-                    setTripFromCoord(null);
-                  }
-                }}
-                onSelect={(selection) => {
-                  setTripFrom(selection.address);
-                  setTripFromCoord({ lat: selection.lat, lng: selection.lng });
-                }}
-                placeholder="Selecciona el origen"
-                disabled={posting}
-              />
-            </div>
-            <div style={styles.switchWrapper}>
-              <button
-                type="button"
-                style={styles.switchButton}
-                onClick={() => {
-                  setTripFrom(tripTo);
-                  setTripFromCoord(tripToCoord);
-                  setTripTo(tripFrom);
-                  setTripToCoord(tripFromCoord);
-                }}
-                title="Intercambiar origen y destino"
-              >
-                ↻
-              </button>
-            </div>
-            <div style={styles.locationCard}>
-              <div style={styles.locationLabel}>To</div>
-              <PlaceAutocomplete
-                value={tripTo}
-                onChange={(value) => {
-                  setTripTo(value);
-                  if (!value) {
-                    setTripToCoord(null);
-                  }
-                }}
-                onSelect={(selection) => {
-                  setTripTo(selection.address);
-                  setTripToCoord({ lat: selection.lat, lng: selection.lng });
-                }}
-                placeholder="Selecciona el destino"
-                disabled={posting}
-              />
-            </div>
-            <div style={styles.timeCard}>
-              <div style={styles.dateTimeRow}>
-                <div style={styles.dateTimeField}>
-                  <label style={styles.inputLabel}>Departure day</label>
-                  <div style={styles.inputWithIcon}>
-                    <input
-                      type="date"
-                      value={tripDate}
-                      onChange={(event) => setTripDate(event.target.value)}
-                      min={today}
-                      style={styles.dateInput}
-                    />
-                    <span role="img" aria-label="calendar">
-                      📅
-                    </span>
-                  </div>
-                </div>
-                <div style={styles.dateTimeField}>
-                  <label style={styles.inputLabel}>Hour</label>
-                  <div style={styles.inputWithIcon}>
-                    <input
-                      type="time"
-                      value={tripTime}
-                      onChange={(event) => setTripTime(event.target.value)}
-                      style={styles.dateInput}
-                    />
-                    <span role="img" aria-label="clock">
-                      ⏱️
-                    </span>
-                  </div>
-                </div>
+              <label style={styles.locationLabel}>From</label>
+              <div style={styles.placeAutocompleteWrapper}>
+                <PlaceAutocomplete
+                  value={tripFrom}
+                  onChange={(value) => {
+                    setTripFrom(value);
+                    if (!value) {
+                      setTripFromCoord(null);
+                    }
+                  }}
+                  onSelect={(selection) => {
+                    setTripFrom(selection.address);
+                    setTripFromCoord({ lat: selection.lat, lng: selection.lng });
+                  }}
+                  placeholder="Bogotá..."
+                  disabled={posting}
+                />
               </div>
             </div>
             <button
+              type="button"
+              style={styles.swapButton}
+              onClick={() => {
+                setTripFrom(tripTo);
+                setTripFromCoord(tripToCoord);
+                setTripTo(tripFrom);
+                setTripToCoord(tripFromCoord);
+              }}
+              title="Intercambiar origen y destino"
+            >
+              ↻
+            </button>
+            <div style={styles.locationCard}>
+              <label style={styles.locationLabel}>To</label>
+              <div style={styles.placeAutocompleteWrapper}>
+                <PlaceAutocomplete
+                  value={tripTo}
+                  onChange={(value) => {
+                    setTripTo(value);
+                    if (!value) {
+                      setTripToCoord(null);
+                    }
+                  }}
+                  onSelect={(selection) => {
+                    setTripTo(selection.address);
+                    setTripToCoord({ lat: selection.lat, lng: selection.lng });
+                  }}
+                  placeholder="Chía, Cundinamarca..."
+                  disabled={posting}
+                />
+              </div>
+            </div>
+            <div style={styles.dateCard}>
+              <label style={styles.inputLabel}>
+                Departure Day {!tripDate && <span style={{ color: "#dc2626" }}>*</span>}
+              </label>
+              <input
+                type="date"
+                value={tripDate}
+                onChange={(event) => setTripDate(event.target.value)}
+                min={today}
+                style={styles.dateInputField}
+                required
+              />
+            </div>
+            <div style={styles.hourCard}>
+              <label style={styles.inputLabel}>
+                Hour {!tripTime && <span style={{ color: "#dc2626" }}>*</span>}
+              </label>
+              <input
+                type="time"
+                value={tripTime}
+                onChange={(event) => setTripTime(event.target.value)}
+                style={styles.timeInputField}
+                required
+              />
+            </div>
+            <button
+              type="button"
               style={{
                 ...styles.addTripBtn,
                 ...(canPublishTrip ? {} : styles.addTripBtnDisabled),
               }}
-              onClick={handleOpenVehicleModal}
-              title={
-                canPublishTrip
-                  ? "Seleccionar vehículo"
-                  : "Cambia a modo conductor para publicar"
-              }
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Revalidar siempre antes de validar - obtener datos frescos del backend
+                await refreshUser();
+                
+                // Obtener datos frescos directamente del backend
+                try {
+                  const token = await ensureValidToken();
+                  if (!token) {
+                    alert("No estás autenticado. Inicia sesión nuevamente.");
+                    return;
+                  }
+                  
+                  const freshUserData = await api.get("/api/me", token);
+                  if (freshUserData) {
+                    // Recalcular canPublishTrip con datos frescos
+                    const freshCanPublish = !isPassenger && 
+                      !posting && 
+                      tripDate && 
+                      tripTime && 
+                      tripFrom && 
+                      tripTo && 
+                      tripFromCoord && 
+                      tripToCoord &&
+                      freshUserData.roles?.includes("driver") === true &&
+                      freshUserData.hasCar === true;
+                    
+                    if (freshCanPublish) {
+                      handleOpenVehicleModal();
+                    } else {
+                      // Mostrar mensaje según lo que falte
+                      if (isPassenger) {
+                        alert("Cambia a modo conductor para publicar");
+                      } else if (!freshUserData.roles?.includes("driver")) {
+                        alert("Debes registrarte como conductor primero. Ve a 'My Car' para registrarte.");
+                      } else if (!freshUserData.hasCar) {
+                        alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
+                      } else if (!tripFrom || !tripTo) {
+                        alert("Completa origen y destino");
+                      } else if (!tripFromCoord || !tripToCoord) {
+                        alert("Selecciona las coordenadas en el mapa");
+                      } else if (!tripDate) {
+                        alert("Selecciona la fecha del viaje");
+                      } else if (!tripTime) {
+                        alert("Selecciona la hora del viaje");
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error("Error revalidating user:", error);
+                  alert("Error al verificar tus permisos. Intenta nuevamente.");
+                }
+              }}
+              title={(() => {
+                if (isPassenger) {
+                  return "Cambia a modo conductor para publicar";
+                }
+                if (role !== "driver") {
+                  return "Debes estar en modo conductor para publicar viajes";
+                }
+                if (!user?.roles?.includes("driver")) {
+                  return "Debes registrarte como conductor primero. Ve a 'My Car' para registrarte.";
+                }
+                if (!user?.hasCar) {
+                  return "Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.";
+                }
+                if (!tripFrom || !tripTo) {
+                  return "Completa origen y destino";
+                }
+                if (!tripFromCoord || !tripToCoord) {
+                  return "Selecciona las coordenadas en el mapa";
+                }
+                if (!tripDate) {
+                  return "Selecciona la fecha del viaje";
+                }
+                if (!tripTime) {
+                  return "Selecciona la hora del viaje";
+                }
+                return "Seleccionar vehículo";
+              })()}
               disabled={!canPublishTrip}
             >
               <span style={styles.addTripBtnIcon}>+</span>
             </button>
           </div>
+          
+          <div style={styles.backButtonContainer}>
+            <button
+              type="button"
+              style={styles.backButtonBelow}
+              onClick={(e) => {
+                e.preventDefault();
+                router.push("/pages/login/landing");
+              }}
+            >
+              ← Volver
+            </button>
+          </div>
 
-          <div style={styles.tripBody}>
+          <div style={styles.resultsContainer}>
+            {error && <div style={styles.errorBox}>{error}</div>}
             {feedback && <div style={styles.feedback}>{feedback}</div>}
             {availableTripsLoading ? (
-              <div style={styles.placeholder}>Buscando viajes compatibles…</div>
+              <div style={styles.emptyMessage}>Buscando viajes compatibles…</div>
             ) : availableTripsError ? (
               <div style={styles.errorBox}>{availableTripsError}</div>
             ) : availableTrips.length > 0 ? (
@@ -639,7 +843,6 @@ export default function TripCreatePage() {
                     </div>
                     <div style={styles.availableMeta}>
                       <div>Asientos libres: {trip.seats}</div>
-                      <div>Extra minutos: {trip.extra_minutes || 0}</div>
                     </div>
                     <button
                       style={{
@@ -655,10 +858,8 @@ export default function TripCreatePage() {
                 ))}
               </div>
             ) : (
-              <div style={styles.placeholder}>
-                Ningún viaje coincide con tu ruta y tolerancia de desvío.
-                <br />
-                Intenta ajustar origen/destino o el horario para ver más opciones.
+              <div style={styles.emptyMessage}>
+                No se encontraron viajes disponibles para tu ruta. Intenta ajustar origen/destino o el horario para ver más opciones.
               </div>
             )}
           </div>
@@ -738,29 +939,28 @@ export default function TripCreatePage() {
                   disabled={posting}
                 />
 
-                <label style={styles.inputLabel}>Minutos extra para desvíos</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={5}
-                  placeholder="Ej: 10"
-                  value={extraMinutes}
-                  onChange={(event) => setExtraMinutes(event.target.value)}
-                  style={styles.input}
-                  disabled={posting}
-                />
 
                 <button
+                  type="button"
                   style={{ ...styles.confirmBtn, opacity: posting ? 0.7 : 1 }}
-                  onClick={handleCreateTrip}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCreateTrip();
+                  }}
                   disabled={posting}
                 >
                   {posting ? "Publicando viaje…" : "Publicar viaje"}
                 </button>
 
                 <button
+                  type="button"
                   style={styles.secondaryAction}
-                  onClick={() => setSelectedVehicle(null)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSelectedVehicle(null);
+                  }}
                   disabled={posting}
                 >
                   Elegir otro vehículo
@@ -771,8 +971,12 @@ export default function TripCreatePage() {
                 {vehicles.map((vehicle) => (
                   <button
                     key={vehicle.vehicle_id}
+                    type="button"
                     style={styles.vehicleCard}
-                    onClick={() => handleSelectVehicle(vehicle)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSelectVehicle(vehicle);
+                    }}
                   >
                     <div style={styles.vehicleCardThumb}>
                       <img
@@ -806,17 +1010,18 @@ export default function TripCreatePage() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "linear-gradient(135deg, #0f2230 0%, #2a3f58 50%, #f1f3f6 100%)",
+    background: "#f9fafb",
     padding: "40px 24px",
     display: "flex",
     justifyContent: "center",
+    fontFamily: "Inter, Nunito Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
   container: {
-    width: "min(1500px, 100%)",
-    background: "#f8f9fb",
+    width: "min(1200px, 100%)",
+    background: "#ffffff",
     borderRadius: 24,
     padding: 32,
-    boxShadow: "0 24px 80px rgba(15, 34, 48, 0.25)",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
     display: "grid",
     gap: 24,
   },
@@ -824,6 +1029,24 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 16,
+  },
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  backButtonRoute: {
+    background: "transparent",
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 12,
+    padding: "8px 16px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    color: "#0f2230",
   },
   brandButton: {
     display: "flex",
@@ -833,7 +1056,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     padding: 0,
     cursor: "pointer",
-    transition: "transform 0.2s ease",
   },
   brand: {
     fontSize: 22,
@@ -896,6 +1118,17 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 10,
   },
+  userInfoButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    padding: "4px 8px",
+    borderRadius: 8,
+    transition: "background 0.2s",
+  },
   userAvatarContainer: {
     width: 36,
     height: 36,
@@ -918,34 +1151,39 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#0f2230",
   },
   tripCard: {
-    background: "#fff",
-    borderRadius: 20,
-    padding: 28,
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
     display: "grid",
-    gap: 32,
-    width: "95%",
-    margin: "0 auto",
+    gap: 24,
   },
   tripRow: {
-    display: "grid",
-    gridTemplateColumns: "1.2fr auto 1.2fr 300px 68px",
-    gap: 30,
-    alignItems: "stretch",
+    display: "flex",
+    alignItems: "flex-end",
+    gap: 16,
+    flexWrap: "wrap",
   },
   locationCard: {
-    border: "1px solid #cbd5e1",
-    borderRadius: 16,
-    padding: "8px 14px",
-    background: "#f8fafc",
-    display: "grid",
-    gap: 3,
+    flex: 1,
+    minWidth: 200,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
   },
   locationLabel: {
     fontSize: 12,
+    fontWeight: 600,
+    color: "#6b7280",
     textTransform: "uppercase",
-    color: "#475569",
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
+  },
+  placeAutocompleteWrapper: {
+    height: 48,
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 12,
+    background: "#f9fafb",
+    display: "flex",
+    alignItems: "center",
+    padding: "0 12px",
   },
   locationValue: {
     fontSize: 13,
@@ -959,24 +1197,23 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 20,
     color: "#64748b",
   },
-  switchWrapper: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0 6px",
-  },
-  switchButton: {
-    border: "1px solid rgba(100,116,139,0.35)",
-    background: "#f8fafc",
-    borderRadius: "50%",
-    width: 30,
-    height: 30,
+  swapButton: {
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    background: "#ffffff",
+    borderRadius: 12,
+    width: 48,
+    height: 48,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     fontSize: 20,
-    color: "#475569",
+    color: "#111827",
     cursor: "pointer",
+    padding: 0,
+    marginBottom: 20,
+    transition: "all 0.2s",
   },
   timeCard: {
     border: "1px solid #cbd5e1",
@@ -1007,25 +1244,76 @@ const styles: Record<string, React.CSSProperties> = {
   dateInput: {
     border: "none",
     background: "transparent",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 600,
     color: "#0f2230",
     outline: "none",
     width: "100%",
+    padding: "8px 10px",
+    cursor: "pointer",
   },
   inputWithIcon: {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     border: "1px solid rgba(100,116,139,0.25)",
     borderRadius: 8,
-    padding: "3px 8px",
+    padding: "4px 10px",
     background: "#fff",
+    minHeight: 40,
+    position: "relative",
   },
   dateTimeRow: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 10,
+  },
+  dateCard: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    minWidth: 180,
+  },
+  hourCard: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    minWidth: 140,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#6b7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  dateInputField: {
+    height: 48,
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 12,
+    padding: "0 12px",
+    fontSize: 14,
+    fontWeight: 500,
+    color: "#111827",
+    background: "#f9fafb",
+    outline: "none",
+    width: "100%",
+  },
+  timeInputField: {
+    height: 48,
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 12,
+    padding: "0 12px",
+    fontSize: 14,
+    fontWeight: 500,
+    color: "#111827",
+    background: "#f9fafb",
+    outline: "none",
+    width: "100%",
   },
   dateTimeField: {
     display: "grid",
@@ -1033,15 +1321,18 @@ const styles: Record<string, React.CSSProperties> = {
   },
   addTripBtn: {
     border: "none",
-    background: "#0f2230",
+    background: "#111827",
     color: "#fff",
-    borderRadius: 18,
+    borderRadius: 12,
     width: 56,
+    height: 56,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
-    fontSize: 24,
+    fontSize: 28,
+    fontWeight: 300,
+    marginBottom: 20,
     transition: "transform 0.2s ease",
   },
   addTripBtnDisabled: {
@@ -1054,16 +1345,40 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 0,
     marginTop: -3,
   },
-  tripBody: {
-    border: "1px dashed rgba(15,34,48,0.15)",
-    borderRadius: 18,
-    minHeight: 340,
+  backButtonContainer: {
     display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "linear-gradient(135deg, rgba(15,34,48,0.02), rgba(15,34,48,0.08))",
-    padding: 32,
+    justifyContent: "flex-start",
+    marginTop: 8,
+  },
+  backButtonBelow: {
+    background: "transparent",
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 12,
+    padding: "8px 16px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    color: "#111827",
+  },
+  resultsContainer: {
+    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 12,
+    minHeight: 200,
+    padding: 24,
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
+  emptyMessage: {
+    fontSize: 14,
+    color: "#9ca3af",
+    lineHeight: 1.6,
     textAlign: "center",
+    padding: "20px 0",
   },
   placeholder: {
     fontSize: 16,
@@ -1316,13 +1631,6 @@ const styles: Record<string, React.CSSProperties> = {
   vehicleCapacity: {
     fontSize: 13,
     color: "#64748b",
-  },
-  inputLabel: {
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    color: "#475569",
-    fontWeight: 600,
   },
   input: {
     border: "1px solid #cbd5e1",

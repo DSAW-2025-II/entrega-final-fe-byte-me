@@ -963,7 +963,9 @@ const styles: any = {
     color: "#374151",
   },
   select: {
-    border: "1px solid #d1d5db",
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
     borderRadius: 8,
     padding: "10px 12px",
     fontSize: 14,

@@ -33,13 +33,47 @@ export const api = {
     });
     
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers,
-        },
+      // Asegurar headers correctos - mergear correctamente
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      };
+      
+      // Si hay Authorization en options.headers, asegurarse de que se use
+      if ((options.headers as any)?.Authorization) {
+        headers["Authorization"] = (options.headers as any).Authorization;
+      }
+      
+      const fetchOptions: RequestInit = {
+        method: options.method || "GET",
+        headers,
+        mode: "cors",
+        credentials: "include", // Para cookies si las usas, no molesta si usas JWT
+      };
+      
+      // Solo agregar body si existe y no es GET
+      if (options.body && options.method !== "GET") {
+        fetchOptions.body = options.body;
+      }
+      
+      // No sobrescribir mode y credentials si ya están en options
+      // pero asegurarse de que siempre estén configurados
+      if (options.mode) {
+        fetchOptions.mode = options.mode;
+      }
+      if (options.credentials !== undefined) {
+        fetchOptions.credentials = options.credentials;
+      }
+      
+      console.log("🔍 Fetch options:", {
+        method: fetchOptions.method,
+        url,
+        hasAuth: !!headers["Authorization"],
+        hasBody: !!fetchOptions.body,
+        bodyLength: fetchOptions.body ? String(fetchOptions.body).length : 0,
       });
+      
+      const response = await fetch(url, fetchOptions);
 
       console.log("📥 API Response:", {
         status: response.status,
@@ -49,14 +83,24 @@ export const api = {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: "Unknown error" }));
-        const errorMessage = error.error || error.message || `Request failed with status ${response.status}`;
-        console.error("❌ API Error:", errorMessage, "URL:", url, "Response:", error);
+        // Intentar leer JSON, si viene vacío, leer texto para depurar bien
+        let payload: any = null;
+        const text = await response.text();
+        try {
+          payload = text ? JSON.parse(text) : null;
+        } catch {
+          payload = { raw: text };
+        }
+        
+        const errorMessage = (payload && (payload.error || payload.message)) || `HTTP ${response.status}`;
+        console.error("✘ API Error:", errorMessage, "URL:", url, "Response:", payload ?? text);
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
-      console.log("✅ API Success:", { url, dataKeys: Object.keys(data) });
+      // Misma lógica para parsear respuesta exitosa
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+      console.log("✅ API Success:", { url, dataKeys: data ? Object.keys(data) : [] });
       return data;
     } catch (error: any) {
       console.error("💥 Fetch Error:", {

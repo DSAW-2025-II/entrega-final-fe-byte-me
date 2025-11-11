@@ -29,9 +29,19 @@ export default function UserPage() {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [mapMode, setMapMode] = useState<"city" | "address" | "landmark" | null>(null);
+  const [returnPath, setReturnPath] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    
+    // Obtener ruta de retorno desde sessionStorage
+    const savedReturnPath = sessionStorage.getItem("profile_return_path");
+    if (savedReturnPath) {
+      setReturnPath(savedReturnPath);
+    } else {
+      // Si no hay ruta guardada, asumir que viene del landing
+      setReturnPath("/pages/login/landing");
+    }
     
     const checkMedia = () => {
       setIsMobile(window.innerWidth < 768);
@@ -188,15 +198,26 @@ export default function UserPage() {
           padding: isMobile ? "16px" : "20px",
           background: theme === "dark" ? "#2a2a2a" : "transparent",
         }}>
-          <button
+          <div
             style={{
               ...styles.brandBtn,
               color: theme === "dark" ? "#ededed" : "#0f2230",
             }}
-            onClick={() => router.push("/pages/login/landing")}
           >
             MoveTogether
-          </button>
+          </div>
+          {returnPath && returnPath !== "/pages/login" && (
+            <button
+              style={{
+                ...styles.backButton,
+                color: theme === "dark" ? "#ededed" : "#0f2230",
+                borderColor: theme === "dark" ? "#475569" : "#d1d5db",
+              }}
+              onClick={() => router.push(returnPath)}
+            >
+              ← Volver
+            </button>
+          )}
 
           {/* Barra azul que ocupa el espacio restante */}
           <div style={{
@@ -253,7 +274,7 @@ export default function UserPage() {
             background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
           }}>
             {[
-              { label: "My trips", action: () => dev("My trips"), path: "/pages/trips" },
+              { label: "My trips", action: () => router.push("/pages/trips"), path: "/pages/trips" },
               { label: "My Car", action: () => router.push("/pages/my-car"), path: "/pages/my-car" },
               { label: "My Profile", action: () => {}, path: "/pages/user" },
               { label: "Settings", action: () => router.push("/pages/settings"), path: "/pages/settings" },
@@ -579,6 +600,18 @@ const styles: { [k: string]: React.CSSProperties } = {
     fontSize: 20,
     color: "#0f2230",
     cursor: "pointer",
+  },
+  backButton: {
+    background: "transparent",
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    padding: "8px 16px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    color: "#0f2230",
   },
   fillBar: {
     flex: 1,
