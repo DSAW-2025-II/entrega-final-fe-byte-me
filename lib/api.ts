@@ -34,14 +34,13 @@ export const api = {
     
     try {
       // Asegurar headers correctos - mergear correctamente
-      const headers: HeadersInit = {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      };
-      
-      // Si hay Authorization en options.headers, asegurarse de que se use
-      if ((options.headers as any)?.Authorization) {
-        headers["Authorization"] = (options.headers as any).Authorization;
+      const headers = new Headers(options.headers as HeadersInit);
+      if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+      const maybeAuth = (options.headers as Record<string, string> | undefined)?.Authorization;
+      if (maybeAuth) {
+        headers.set("Authorization", maybeAuth);
       }
       
       const fetchOptions: RequestInit = {
@@ -68,7 +67,7 @@ export const api = {
       console.log("🔍 Fetch options:", {
         method: fetchOptions.method,
         url,
-        hasAuth: !!headers["Authorization"],
+        hasAuth: headers.has("Authorization"),
         hasBody: !!fetchOptions.body,
         bodyLength: fetchOptions.body ? String(fetchOptions.body).length : 0,
       });
