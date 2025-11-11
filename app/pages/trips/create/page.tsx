@@ -92,7 +92,9 @@ export default function TripCreatePage() {
       canBeDriver,
     });
   }, [user, role, canBeDriver]);
-  // Validar que el botón + se habilite solo si role==='driver' && user.hasCar && 'driver'∈user.roles
+  const hasAnyVehicle = useMemo(() => vehicles.length > 0, [vehicles]);
+
+  // Validar que el botón + se habilite solo si está en modo conductor y tiene datos completos
   const canPublishTrip = !isPassenger && 
     !posting && 
     tripDate && 
@@ -101,7 +103,8 @@ export default function TripCreatePage() {
     tripTo && 
     tripFromCoord && 
     tripToCoord &&
-    role === "driver";
+    role === "driver" &&
+    hasAnyVehicle;
 
   // Cargar borrador de viaje almacenado en sessionStorage
   useEffect(() => {
@@ -330,6 +333,11 @@ export default function TripCreatePage() {
       return;
     }
 
+    if (!hasAnyVehicle) {
+      setError("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
+      return;
+    }
+
     setFeedback(null);
     setError(null);
     setSelectedVehicle(null);
@@ -531,15 +539,15 @@ export default function TripCreatePage() {
                     const token = await ensureValidToken();
                     if (token) {
                       const freshUserData = await api.get("/api/me", token);
+                      const vehiclesResp = await api.get("/api/vehicles", token);
+                      const freshVehicles = Array.isArray(vehiclesResp?.vehicles) ? vehiclesResp.vehicles : [];
                       if (freshUserData) {
-                        const freshCanBeDriver = true;
-                        
-                        if (freshCanBeDriver) {
+                        if (freshVehicles.length > 0) {
+                          setVehicles(freshVehicles);
                           setRoleMode("driver");
-                          // Actualizar el contexto también
                           await refreshUser();
                         } else {
-                          alert("No puedes usar el modo conductor en este momento.");
+                          alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
                         }
                       }
                     }
@@ -700,33 +708,34 @@ export default function TripCreatePage() {
                     return;
                   }
                   
-                  const freshUserData = await api.get("/api/me", token);
-                  if (freshUserData) {
-                    // Recalcular canPublishTrip con datos frescos
-                      const freshCanPublish = !isPassenger && 
-                      !posting && 
-                      tripDate && 
-                      tripTime && 
-                      tripFrom && 
-                      tripTo && 
-                      tripFromCoord && 
-                      tripToCoord;
-                    
-                    if (freshCanPublish) {
-                      handleOpenVehicleModal();
-                    } else {
-                      // Mostrar mensaje según lo que falte
-                      if (isPassenger) {
-                        alert("Cambia a modo conductor para publicar");
-                      } else if (!tripFrom || !tripTo) {
-                        alert("Completa origen y destino");
-                      } else if (!tripFromCoord || !tripToCoord) {
-                        alert("Selecciona las coordenadas en el mapa");
-                      } else if (!tripDate) {
-                        alert("Selecciona la fecha del viaje");
-                      } else if (!tripTime) {
-                        alert("Selecciona la hora del viaje");
-                      }
+                  const vehiclesResp = await api.get("/api/vehicles", token);
+                  const freshVehicles = Array.isArray(vehiclesResp?.vehicles) ? vehiclesResp.vehicles : [];
+                  const freshCanPublish = !isPassenger && 
+                    !posting && 
+                    tripDate && 
+                    tripTime && 
+                    tripFrom && 
+                    tripTo && 
+                    tripFromCoord && 
+                    tripToCoord &&
+                    freshVehicles.length > 0;
+                  
+                  if (freshCanPublish) {
+                    setVehicles(freshVehicles);
+                    handleOpenVehicleModal();
+                  } else {
+                    if (isPassenger) {
+                      alert("Cambia a modo conductor para publicar");
+                    } else if (freshVehicles.length === 0) {
+                      alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
+                    } else if (!tripFrom || !tripTo) {
+                      alert("Completa origen y destino");
+                    } else if (!tripFromCoord || !tripToCoord) {
+                      alert("Selecciona las coordenadas en el mapa");
+                    } else if (!tripDate) {
+                      alert("Selecciona la fecha del viaje");
+                    } else if (!tripTime) {
+                      alert("Selecciona la hora del viaje");
                     }
                   }
                 } catch (error) {
@@ -740,6 +749,9 @@ export default function TripCreatePage() {
                 }
                 if (role !== "driver") {
                   return "Debes estar en modo conductor para publicar viajes";
+                }
+                if (!hasAnyVehicle) {
+                  return "Registra un vehículo en 'My Car' primero";
                 }
                 if (!tripFrom || !tripTo) {
                   return "Completa origen y destino";
