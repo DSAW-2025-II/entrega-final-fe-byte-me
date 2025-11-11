@@ -12,11 +12,12 @@ function initializeFirebase() {
   if (typeof window === "undefined") return;
   if (app) return; // Ya está inicializado
 
+  const storageBucketEnv = (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "movetogether-e31d4.firebasestorage.app").trim();
   const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "movetogether-e31d4.firebasestorage.app",
+    storageBucket: storageBucketEnv,
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   };
@@ -33,9 +34,10 @@ function initializeFirebase() {
     auth = getAuth(app);
     
     // Configurar Storage con el bucket correcto
-    const bucket = firebaseConfig.storageBucket;
+    const bucket = firebaseConfig.storageBucket ? firebaseConfig.storageBucket.trim() : "";
     if (bucket) {
-      storage = getStorage(app, bucket);
+      const bucketUrl = bucket.startsWith("gs://") ? bucket : `gs://${bucket}`;
+      storage = getStorage(app, bucketUrl);
     } else {
       storage = getStorage(app);
     }
