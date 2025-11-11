@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { ensureValidToken } from "@/lib/auth";
 import Image from "next/image";
+import { useTheme } from "@/app/contexts/ThemeContext";
+import { useUser } from "@/app/contexts/UserContext";
 
 interface Trip {
   trip_id: string;
@@ -33,10 +35,34 @@ interface Trip {
 
 export default function MyTripsPage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const { user, refreshUser } = useUser();
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [userData, setUserData] = useState<any>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const updateMedia = () => {
+      setIsMobile(window.innerWidth < 768);
+      setIsTablet(window.innerWidth >= 768 && window.innerWidth < 1024);
+    };
+
+    updateMedia();
+    window.addEventListener("resize", updateMedia);
+
+    return () => {
+      window.removeEventListener("resize", updateMedia);
+    };
+  }, []);
+
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,9 +74,9 @@ export default function MyTripsPage() {
         }
 
         // Obtener datos del usuario
-        const userResponse = await api.get("/api/me", token);
-        if (userResponse) {
-          setUserData(userResponse);
+        const meResponse = await api.get("/api/me", token);
+        if (meResponse) {
+          setUserData(meResponse);
         }
 
         // Obtener viajes
@@ -90,6 +116,37 @@ export default function MyTripsPage() {
     }
   };
 
+  const fullName = useMemo(() => {
+    const base = userData || user;
+    if (!base) return "Usuario";
+    const first = base.first_name || "";
+    const last = base.last_name || "";
+    const name = `${first} ${last}`.trim();
+    const email = base.email || (base.user_email ?? "");
+    return name || (email ? email.split("@")[0] : "Usuario");
+  }, [userData, user]);
+
+  const pageStyle = useMemo(
+    () => ({
+      ...styles.page,
+      background:
+        theme === "dark"
+          ? "linear-gradient(180deg, #1a1a1a 0%, #2a2a2a 30%, #0a0a0a 100%)"
+          : "linear-gradient(180deg, #cfd8e3 0%, #e8edf3 30%, #0f2230 100%)",
+      padding: isMobile ? "16px 12px" : "32px 24px",
+    }),
+    [theme, isMobile]
+  );
+
+  const containerStyle = useMemo(
+    () => ({
+      ...styles.container,
+      background: theme === "dark" ? "#1a1a1a" : "#fff",
+      color: theme === "dark" ? "#ededed" : "#111827",
+    }),
+    [theme]
+  );
+
   if (loading) {
     return (
       <div style={styles.loading}>
@@ -99,56 +156,65 @@ export default function MyTripsPage() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <header style={styles.header}>
-          <div 
-            style={styles.brandButton}
-            onClick={() => router.push("/pages/login/landing")}
+    <div style={pageStyle}>
+      <div style={containerStyle}>
+        <header
+          style={{
+            ...styles.topbar,
+            flexDirection: isMobile ? "column" : "row",
+            gap: isMobile ? 12 : 12,
+            padding: isMobile ? "16px" : "20px",
+            background: theme === "dark" ? "#2a2a2a" : "transparent",
+          }}
+        >
+          <div
+            style={{
+              ...styles.brandBtn,
+              color: theme === "dark" ? "#ededed" : "#0f2230",
+            }}
           >
-            <span style={styles.brand}>MoveTogether</span>
-            <span style={styles.tripTag}>My Trips</span>
+            MoveTogether
           </div>
           <button
-            style={styles.backButton}
-            onClick={() => {
-              router.push("/pages/login/landing");
+            style={{
+              ...styles.backButton,
+              color: theme === "dark" ? "#ededed" : "#0f2230",
+              borderColor: theme === "dark" ? "#475569" : "#d1d5db",
             }}
+            onClick={() => router.push("/pages/login/landing")}
           >
             ← Volver
           </button>
-        </header>
 
-        {/* Header con foto y nombre - Click para ir al perfil */}
-        {userData && (
-          <div style={styles.userHeader}>
+          <div style={{ ...styles.fillBar, width: isMobile ? "100%" : "auto" }}>
+            <div style={{ ...styles.toolbar, marginLeft: "auto" }}>
+              <button style={styles.iconBtn} title="Mensajes">
+                💬
+              </button>
+              <button style={styles.iconBtn} title="Notificaciones">
+                🔔
+              </button>
+            </div>
             <button
-              type="button"
-              style={styles.userHeaderButton}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log("Click en botón de perfil");
-                // Guardar origen en sessionStorage antes de ir al perfil
-                if (typeof window !== "undefined") {
-                  sessionStorage.setItem("profile_return_path", "/pages/trips");
-                }
-                router.push("/pages/user");
+              style={{
+                ...styles.userHeaderButton,
+                marginLeft: isMobile ? 0 : 12,
+                background: theme === "dark" ? "#0f2230" : "#0f2230",
+                color: "#fff",
               }}
+              onClick={() => router.push("/pages/user")}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f8fafc";
-                e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
+                e.currentTarget.style.background = theme === "dark" ? "#102a4a" : "#12263a";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#fff";
-                e.currentTarget.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
+                e.currentTarget.style.background = "#0f2230";
               }}
             >
-              <div style={styles.userHeaderAvatar}>
-                {userData.user_photo ? (
+              <div style={{ ...styles.userHeaderAvatar, background: "#1e293b" }}>
+                {userData?.user_photo || user?.user_photo ? (
                   <Image
-                    src={userData.user_photo}
-                    alt="User avatar"
+                    src={userData?.user_photo || user?.user_photo}
+                    alt="avatar"
                     fill
                     style={{ objectFit: "cover", borderRadius: "50%" }}
                   />
@@ -156,100 +222,225 @@ export default function MyTripsPage() {
                   <div style={styles.userHeaderAvatarFallback}>👤</div>
                 )}
               </div>
-              <span style={styles.userHeaderName}>
-                {userData.first_name || ""} {userData.last_name || ""}
-              </span>
+              <span style={{ ...styles.userHeaderName, color: "#fff" }}>{fullName}</span>
             </button>
           </div>
-        )}
+        </header>
 
-        <section style={styles.content}>
-          <h1 style={styles.title}>Mis Viajes</h1>
+        <div
+          style={{
+            ...styles.body,
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : isTablet
+              ? "200px 1fr"
+              : "230px 1fr",
+            gap: isMobile ? 16 : 24,
+            padding: isMobile ? "0 16px 24px 16px" : "0 28px 32px 28px",
+          }}
+        >
+          <aside
+            style={{
+              ...styles.sidebar,
+              display: isMobile ? "flex" : "grid",
+              flexDirection: isMobile ? "row" : "column",
+              overflowX: isMobile ? "auto" : "visible",
+              gap: isMobile ? 8 : 8,
+              padding: isMobile ? "12px" : "14px",
+              background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
+            }}
+          >
+            {[
+              { label: "My trips", path: "/pages/trips", action: () => {} },
+              { label: "My Car", path: "/pages/my-car", action: () => router.push("/pages/my-car") },
+              { label: "My Profile", path: "/pages/user", action: () => router.push("/pages/user") },
+              { label: "Settings", path: "/pages/settings", action: () => router.push("/pages/settings") },
+              { label: "Help", path: "/pages/help", action: () => router.push("/pages/help") },
+              { label: "Close session", path: "/pages/login", action: () => router.push("/pages/login") },
+            ].map((item) => {
+              const isActive = item.path === "/pages/trips";
+              return (
+                <button
+                  key={item.label}
+                  style={{
+                    ...styles.sideItem,
+                    whiteSpace: isMobile ? "nowrap" : "normal",
+                    minWidth: isMobile ? "120px" : "auto",
+                    backgroundColor: isActive ? "#d1d5db" : "transparent",
+                  }}
+                  onClick={item.action}
+                  disabled={isActive}
+                >
+                  <span>{item.label}</span>
+                  <span style={{ fontWeight: 700 }}>+</span>
+                </button>
+              );
+            })}
+          </aside>
 
-          {error && <div style={styles.errorBox}>{error}</div>}
+          <main
+            style={{
+              ...styles.main,
+              paddingRight: isMobile ? 0 : 6,
+            }}
+          >
+            <h2
+              style={{
+                ...styles.sectionTitle,
+                fontSize: isMobile ? 20 : 22,
+                color: theme === "dark" ? "#ededed" : "#0f2230",
+              }}
+            >
+              My trips
+            </h2>
 
-          {trips.length === 0 ? (
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>🚗</div>
-              <div style={styles.emptyText}>
-                No has publicado ningún viaje aún.
-              </div>
-              <button
-                style={styles.createButton}
-                onClick={() => router.push("/pages/login/landing")}
+            {userData && (
+              <section
+                style={{
+                  ...styles.cardWide,
+                  padding: isMobile ? "16px" : "24px",
+                  background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
+                }}
               >
-                Crear un viaje
-              </button>
-            </div>
-          ) : (
-            <div style={styles.tripsList}>
-              {trips.map((trip) => (
-                <div key={trip.trip_id} style={styles.tripCard}>
-                  <div style={styles.tripHeader}>
-                    <div style={styles.tripStatus}>
-                      <span
-                        style={{
-                          ...styles.statusBadge,
-                          background:
-                            trip.status === "open"
-                              ? "rgba(40,167,69,0.15)"
-                              : "rgba(108,117,125,0.15)",
-                          color:
-                            trip.status === "open"
-                              ? "#28a745"
-                              : "#6c757d",
-                        }}
-                      >
-                        {trip.status === "open" ? "Abierto" : trip.status || "Desconocido"}
-                      </span>
-                    </div>
-                    <div style={styles.tripFare}>
-                      ${Number(trip.fare || 0).toLocaleString("es-CO")}
-                    </div>
+                <div
+                  style={{
+                    ...styles.headerRow,
+                    flexDirection: isMobile ? "column" : "row",
+                    gap: isMobile ? 16 : 16,
+                    alignItems: isMobile ? "center" : "flex-start",
+                    textAlign: isMobile ? "center" : "left",
+                  }}
+                >
+                  <div style={styles.avatarWrap}>
+                    {userData?.user_photo || user?.user_photo ? (
+                      <Image
+                        src={userData?.user_photo || user?.user_photo}
+                        alt="avatar"
+                        fill
+                        style={{ objectFit: "cover", borderRadius: "50%" }}
+                      />
+                    ) : (
+                      <div style={styles.avatarFallback}>👤</div>
+                    )}
                   </div>
-
-                  <div style={styles.tripBody}>
-                    <div style={styles.locationRow}>
-                      <div style={styles.locationItem}>
-                        <div style={styles.locationLabel}>Origen</div>
-                        <div style={styles.locationValue}>
-                          {trip.start?.address || "—"}
-                        </div>
-                      </div>
-                      <div style={styles.locationItem}>
-                        <div style={styles.locationLabel}>Destino</div>
-                        <div style={styles.locationValue}>
-                          {trip.destination?.address || "—"}
-                        </div>
-                      </div>
+                  <div style={{ display: "grid", gap: 4 }}>
+                    <div
+                      style={{
+                        ...styles.nameText,
+                        color: theme === "dark" ? "#ededed" : "#0f2230",
+                      }}
+                    >
+                      {fullName}
                     </div>
-
-                    <div style={styles.tripMeta}>
-                      <div style={styles.metaItem}>
-                        <span style={styles.metaLabel}>Fecha y hora:</span>
-                        <span style={styles.metaValue}>
-                          {trip.time ? formatDateTime(trip.time) : "—"}
-                        </span>
-                      </div>
-                      <div style={styles.metaItem}>
-                        <span style={styles.metaLabel}>Asientos disponibles:</span>
-                        <span style={styles.metaValue}>{trip.seats || 0}</span>
-                      </div>
-                      {trip.vehicle && (
-                        <div style={styles.metaItem}>
-                          <span style={styles.metaLabel}>Vehículo:</span>
-                          <span style={styles.metaValue}>
-                            {trip.vehicle.model || "—"} • {trip.vehicle.license_plate || "—"}
-                          </span>
-                        </div>
-                      )}
+                    <div
+                      style={{
+                        ...styles.muted,
+                        color: theme === "dark" ? "#a0a0a0" : "#475569",
+                      }}
+                    >
+                      {userData?.email || user?.email || "—"}
+                    </div>
+                    <div
+                      style={{
+                        ...styles.muted,
+                        color: theme === "dark" ? "#a0a0a0" : "#475569",
+                      }}
+                    >
+                      {userData?.phone || user?.phone || "—"}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+              </section>
+            )}
+
+            <section
+              style={{
+                ...styles.cardWide,
+                background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
+              }}
+            >
+              {error && <div style={styles.errorBox}>{error}</div>}
+
+              {trips.length === 0 ? (
+                <div style={styles.emptyState}>
+                  <div style={styles.emptyIcon}>🚗</div>
+                  <div style={styles.emptyText}>
+                    No has publicado ningún viaje aún.
+                  </div>
+                  <button
+                    style={styles.createButton}
+                    onClick={() => router.push("/pages/login/landing")}
+                  >
+                    Crear un viaje
+                  </button>
+                </div>
+              ) : (
+                <div style={styles.tripsList}>
+                  {trips.map((trip) => (
+                    <div key={trip.trip_id} style={styles.tripCard}>
+                      <div style={styles.tripHeader}>
+                        <span
+                          style={{
+                            ...styles.statusBadge,
+                            background:
+                              trip.status === "open"
+                                ? "rgba(40,167,69,0.15)"
+                                : "rgba(108,117,125,0.15)",
+                            color:
+                              trip.status === "open" ? "#28a745" : "#6c757d",
+                          }}
+                        >
+                          {trip.status === "open" ? "Abierto" : trip.status || "Desconocido"}
+                        </span>
+                        <div style={styles.tripFare}>
+                          ${Number(trip.fare || 0).toLocaleString("es-CO")}
+                        </div>
+                      </div>
+
+                      <div style={styles.tripBody}>
+                        <div style={styles.locationRow}>
+                          <div style={styles.locationItem}>
+                            <div style={styles.locationLabel}>Origen</div>
+                            <div style={styles.locationValue}>
+                              {trip.start?.address || "—"}
+                            </div>
+                          </div>
+                          <div style={styles.locationItem}>
+                            <div style={styles.locationLabel}>Destino</div>
+                            <div style={styles.locationValue}>
+                              {trip.destination?.address || "—"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={styles.tripMeta}>
+                          <div style={styles.metaItem}>
+                            <span style={styles.metaLabel}>Fecha y hora:</span>
+                            <span style={styles.metaValue}>
+                              {trip.time ? formatDateTime(trip.time) : "—"}
+                            </span>
+                          </div>
+                          <div style={styles.metaItem}>
+                            <span style={styles.metaLabel}>Asientos disponibles:</span>
+                            <span style={styles.metaValue}>{trip.seats || 0}</span>
+                          </div>
+                          {trip.vehicle && (
+                            <div style={styles.metaItem}>
+                              <span style={styles.metaLabel}>Vehículo:</span>
+                              <span style={styles.metaValue}>
+                                {trip.vehicle.model || "—"} • {trip.vehicle.license_plate || "—"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </main>
+        </div>
       </div>
     </div>
   );
@@ -258,8 +449,6 @@ export default function MyTripsPage() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "#f9fafb",
-    padding: "40px 24px",
     display: "flex",
     justifyContent: "center",
     fontFamily: "Inter, Nunito Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -269,38 +458,23 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ffffff",
     borderRadius: 24,
     padding: 32,
-    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    boxShadow: "0 18px 50px rgba(0,0,0,0.12)",
     display: "grid",
     gap: 24,
   },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-  },
-  brandButton: {
+  topbar: {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    background: "transparent",
+    padding: 20,
+  },
+  brandBtn: {
+    background: "none",
     border: "none",
-    padding: 0,
-    cursor: "pointer",
-  },
-  brand: {
-    fontSize: 22,
-    fontWeight: 700,
+    fontWeight: 800,
+    fontSize: 20,
     color: "#0f2230",
-    letterSpacing: 0.5,
-  },
-  tripTag: {
-    background: "rgba(15, 34, 48, 0.08)",
-    color: "#0f2230",
-    padding: "6px 12px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 600,
+    cursor: "default",
   },
   backButton: {
     background: "transparent",
@@ -313,6 +487,45 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 14,
     color: "#111827",
+  },
+  fillBar: {
+    flex: 1,
+    background: "#0b0b0b",
+    borderRadius: 18,
+    padding: 6,
+    display: "flex",
+    alignItems: "center",
+  },
+  toolbar: {
+    marginLeft: "auto",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    color: "#fff",
+  },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    border: "2px solid #fff",
+    background: "#fff",
+    cursor: "pointer",
+    fontSize: 18,
+  },
+  userPill: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    color: "#fff",
+    padding: "0 10px",
+  },
+  userCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    background: "#1e2937",
+    display: "grid",
+    placeItems: "center",
   },
   content: {
     display: "grid",
@@ -492,6 +705,73 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 600,
     color: "#0f2230",
+  },
+  main: {
+    paddingRight: 6,
+  },
+  sectionTitle: {
+    margin: "6px 0 10px 2px",
+    fontSize: 22,
+    fontWeight: 800,
+    color: "#0f2230",
+  },
+  cardWide: {
+    background: "#e5e7eb",
+    borderRadius: 10,
+    padding: 24,
+    display: "grid",
+    gap: 20,
+    gridTemplateColumns: "1fr",
+    alignItems: "start",
+  },
+  headerRow: {
+    display: "flex",
+    gap: 16,
+    alignItems: "center",
+  },
+  avatarWrap: {
+    position: "relative",
+    width: 90,
+    height: 90,
+    borderRadius: "50%",
+    overflow: "hidden",
+    background: "#0f2230",
+    display: "grid",
+    placeItems: "center",
+  },
+  avatarFallback: {
+    fontSize: 40,
+  },
+  nameText: {
+    fontSize: 20,
+    fontWeight: 700,
+  },
+  muted: {
+    fontSize: 14,
+  },
+  body: {
+    display: "grid",
+    gap: 24,
+    alignItems: "start",
+  },
+  sidebar: {
+    background: "#e5e7eb",
+    borderRadius: 12,
+    padding: 14,
+    display: "grid",
+    gap: 8,
+  },
+  sideItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "transparent",
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 12px",
+    cursor: "pointer",
+    fontSize: 14,
+    textAlign: "left",
   },
 };
 
