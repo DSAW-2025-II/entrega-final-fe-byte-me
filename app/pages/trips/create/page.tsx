@@ -967,7 +967,7 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#f9fafb",
-    padding: "40px 24px",
+    padding: "16px 24px",
     display: "flex",
     justifyContent: "center",
     fontFamily: "Inter, Nunito Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -976,10 +976,10 @@ const styles: Record<string, React.CSSProperties> = {
     width: "min(1200px, 100%)",
     background: "#ffffff",
     borderRadius: 24,
-    padding: 32,
+    padding: "16px 32px 32px 32px",
     boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
     display: "grid",
-    gap: 24,
+    gap: 8,
   },
   header: {
     display: "flex",
