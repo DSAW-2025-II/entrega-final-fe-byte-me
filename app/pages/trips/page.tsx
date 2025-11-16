@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { ensureValidToken } from "@/lib/auth";
@@ -26,6 +26,9 @@ interface Trip {
     name?: string;
     photo?: string;
   };
+  driver_uid?: string;
+  waitlist?: any[];
+  passenger_list?: any[];
   vehicle?: {
     model?: string;
     license_plate?: string;
@@ -38,11 +41,15 @@ export default function MyTripsPage() {
   const { theme } = useTheme();
   const { user, refreshUser } = useUser();
   const [loading, setLoading] = useState(true);
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [driverTrips, setDriverTrips] = useState<Trip[]>([]);
+  const [passengerTrips, setPassengerTrips] = useState<Trip[]>([]);
+  const [myTripsStatus, setMyTripsStatus] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [userData, setUserData] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
+  const [activeTab, setActiveTab] = useState<"conductor" | "pasajero">("conductor");
+  const [expandedTripId, setExpandedTripId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -64,38 +71,74 @@ export default function MyTripsPage() {
     refreshUser();
   }, [refreshUser]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = await ensureValidToken();
-        if (!token) {
-          router.push("/pages/login");
-          return;
-        }
-
-        // Obtener datos del usuario
-        const meResponse = null;
-        if (meResponse) {
-          setUserData(meResponse);
-        }
-
-        // Obtener viajes
-        const response = await api.get("/api/trips", token);
-        if (response && Array.isArray(response.trips)) {
-          setTrips(response.trips);
-        } else {
-          setTrips([]);
-        }
-      } catch (err: any) {
-        console.error("Error fetching data:", err);
-        setError(err?.message || "No se pudieron cargar los viajes");
-      } finally {
-        setLoading(false);
+  const loadTrips = useCallback(async () => {
+    try {
+      const token = await ensureValidToken();
+      if (!token) {
+        router.push("/pages/login");
+        return;
       }
-    };
 
-    fetchData();
+      // Obtener datos del usuario
+      const meResponse = await api.get("/api/me", token);
+      console.log("👤 MyTrips /api/me response:", meResponse);
+      if (meResponse) {
+        setUserData(meResponse);
+      }
+
+      // Viajes donde el usuario es CONDUCTOR
+      const driverResp = await api.get("/api/trips", token);
+      if (driverResp && Array.isArray(driverResp.trips)) {
+        setDriverTrips(driverResp.trips);
+      } else {
+        setDriverTrips([]);
+      }
+
+      // Viajes donde el usuario es PASAJERO usando my_trips del usuario
+      if (meResponse?.my_trips && Array.isArray(meResponse.my_trips) && meResponse.my_trips.length > 0) {
+        // Extraer IDs y estados de my_trips
+        const myTripIds: string[] = [];
+        const statusMap: Record<string, string> = {};
+        
+        meResponse.my_trips.forEach((item: any) => {
+          if (typeof item === "string") {
+            myTripIds.push(item);
+            statusMap[item] = "waitlist"; // Formato antiguo, asumimos waitlist
+          } else if (item && typeof item === "object" && item.trip_id) {
+            myTripIds.push(item.trip_id);
+            statusMap[item.trip_id] = item.status || "waitlist";
+          }
+        });
+
+        setMyTripsStatus(statusMap);
+
+        if (myTripIds.length > 0) {
+          const query = encodeURIComponent(myTripIds.join(","));
+          const passengerResp = await api.get(`/api/trips?ids=${query}`, token);
+          console.log("🚌 MyTrips passenger trips resp:", passengerResp);
+          if (passengerResp && Array.isArray(passengerResp.trips)) {
+            setPassengerTrips(passengerResp.trips);
+          } else {
+            setPassengerTrips([]);
+          }
+        } else {
+          setPassengerTrips([]);
+        }
+      } else {
+        setPassengerTrips([]);
+        setMyTripsStatus({});
+      }
+    } catch (err: any) {
+      console.error("Error fetching data:", err);
+      setError(err?.message || "No se pudieron cargar los viajes");
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
+
+  useEffect(() => {
+    loadTrips();
+  }, [loadTrips]);
 
   const formatDateTime = (iso: string) => {
     try {
@@ -125,6 +168,41 @@ export default function MyTripsPage() {
     const email = base.email || (base.user_email ?? "");
     return name || (email ? email.split("@")[0] : "Usuario");
   }, [userData, user]);
+
+  const filteredTrips = useMemo(() => {
+    if (activeTab === "conductor") {
+      return driverTrips;
+    }
+    return passengerTrips;
+  }, [activeTab, driverTrips, passengerTrips]);
+
+  const handleAcceptPassenger = useCallback(
+    async (tripId: string, passengerUserId: string) => {
+      try {
+        const token = await ensureValidToken();
+        if (!token) {
+          alert("No estás autenticado. Inicia sesión nuevamente.");
+          return;
+        }
+
+        await api.patch(
+          "/api/trips",
+          {
+            trip_id: tripId,
+            user_id: passengerUserId,
+            action: "accept",
+          },
+          token
+        );
+        alert("Pasajero aceptado exitosamente.");
+        await loadTrips(); // Refrescar la lista de viajes
+      } catch (err: any) {
+        console.error("Error al aceptar pasajero:", err);
+        alert(err?.message || "No se pudo aceptar al pasajero.");
+      }
+    },
+    [loadTrips]
+  );
 
   const pageStyle = useMemo(
     () => ({
@@ -294,6 +372,52 @@ export default function MyTripsPage() {
               My trips
             </h2>
 
+            <div style={styles.tabsContainer}>
+              <div
+                style={{
+                  ...styles.tabsWrapper,
+                  background: theme === "dark" ? "#1a1a1a" : "#f1f5f9",
+                }}
+              >
+                <button
+                  type="button"
+                  style={{
+                    ...styles.tabButton,
+                    ...(activeTab === "conductor" ? styles.tabButtonActive : {}),
+                    color: activeTab === "conductor" 
+                      ? (theme === "dark" ? "#ededed" : "#0f2230")
+                      : (theme === "dark" ? "#a0a0a0" : "#64748b"),
+                  }}
+                  onClick={() => setActiveTab("conductor")}
+                >
+                  Conductor
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...styles.tabButton,
+                    ...(activeTab === "pasajero" ? styles.tabButtonActive : {}),
+                    color: activeTab === "pasajero"
+                      ? (theme === "dark" ? "#ededed" : "#0f2230")
+                      : (theme === "dark" ? "#a0a0a0" : "#64748b"),
+                  }}
+                  onClick={() => setActiveTab("pasajero")}
+                >
+                  Pasajero
+                </button>
+                <div
+                  style={{
+                    ...styles.tabIndicator,
+                    transform: activeTab === "conductor" ? "translateX(0)" : "translateX(100%)",
+                    background: theme === "dark" ? "#2a2a2a" : "#ffffff",
+                    boxShadow: theme === "dark" 
+                      ? "0 1px 3px rgba(0, 0, 0, 0.3)" 
+                      : "0 1px 3px rgba(0, 0, 0, 0.1)",
+                  }}
+                />
+              </div>
+            </div>
+
             {userData && (
               <section
                 style={{
@@ -361,36 +485,48 @@ export default function MyTripsPage() {
             >
               {error && <div style={styles.errorBox}>{error}</div>}
 
-              {trips.length === 0 ? (
+              {filteredTrips.length === 0 ? (
                 <div style={styles.emptyState}>
                   <div style={styles.emptyIcon}>🚗</div>
                   <div style={styles.emptyText}>
-                    No has publicado ningún viaje aún.
+                    {activeTab === "conductor"
+                      ? "No has publicado ningún viaje aún."
+                      : "No te has aplicado a ningún viaje aún."}
                   </div>
-                  <button
-                    style={styles.createButton}
-                    onClick={() => router.push("/pages/login/landing")}
-                  >
-                    Crear un viaje
-                  </button>
+                  {activeTab === "conductor" && (
+                    <button
+                      style={styles.createButton}
+                      onClick={() => router.push("/pages/login/landing")}
+                    >
+                      Crear un viaje
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div style={styles.tripsList}>
-                  {trips.map((trip) => (
+                  {filteredTrips.map((trip) => (
                     <div key={trip.trip_id} style={styles.tripCard}>
                       <div style={styles.tripHeader}>
                         <span
                           style={{
                             ...styles.statusBadge,
                             background:
-                              trip.status === "open"
-                                ? "rgba(40,167,69,0.15)"
-                                : "rgba(108,117,125,0.15)",
+                              activeTab === "conductor"
+                                ? trip.status === "open"
+                                  ? "rgba(40,167,69,0.15)"
+                                  : "rgba(108,117,125,0.15)"
+                                : myTripsStatus[trip.trip_id] === "accepted"
+                                  ? "rgba(40,167,69,0.15)"
+                                  : "rgba(255,193,7,0.15)",
                             color:
-                              trip.status === "open" ? "#28a745" : "#6c757d",
+                              activeTab === "conductor"
+                                ? trip.status === "open" ? "#28a745" : "#6c757d"
+                                : myTripsStatus[trip.trip_id] === "accepted" ? "#28a745" : "#ffc107",
                           }}
                         >
-                          {trip.status === "open" ? "Abierto" : trip.status || "Desconocido"}
+                          {activeTab === "conductor"
+                            ? trip.status === "open" ? "Abierto" : trip.status || "Desconocido"
+                            : myTripsStatus[trip.trip_id] === "accepted" ? "Aceptado" : "En lista de espera"}
                         </span>
                         <div style={styles.tripFare}>
                           ${Number(trip.fare || 0).toLocaleString("es-CO")}
@@ -434,6 +570,106 @@ export default function MyTripsPage() {
                           )}
                         </div>
                       </div>
+
+                      {activeTab === "conductor" && (
+                        <div style={styles.tripActions}>
+                          <button
+                            type="button"
+                            style={styles.detailsButton}
+                            onClick={() => setExpandedTripId(expandedTripId === trip.trip_id ? null : trip.trip_id)}
+                          >
+                            {expandedTripId === trip.trip_id ? "Ocultar detalles" : "Ver detalles"}
+                          </button>
+                        </div>
+                      )}
+
+                      {activeTab === "conductor" && expandedTripId === trip.trip_id && (
+                        <div style={styles.detailsPanel}>
+                          <div style={styles.metaItem}>
+                            <span style={styles.metaLabel}>ID del viaje:</span>
+                            <span style={styles.metaValue}>{trip.trip_id}</span>
+                          </div>
+                          <div style={styles.metaItem}>
+                            <span style={styles.metaLabel}>Creado:</span>
+                            <span style={styles.metaValue}>
+                              {trip.createdAt ? formatDateTime(trip.createdAt) : "—"}
+                            </span>
+                          </div>
+                          <div style={styles.metaItem}>
+                            <span style={styles.metaLabel}>Estado:</span>
+                            <span style={styles.metaValue}>{trip.status || "—"}</span>
+                          </div>
+
+                          <div style={styles.metaItem}>
+                            <span style={styles.metaLabel}>En lista de espera:</span>
+                            <div style={styles.waitlistContainer}>
+                              {Array.isArray(trip.waitlist) && trip.waitlist.length > 0 ? (
+                                trip.waitlist.map((entry: any, index: number) => (
+                                  <div key={index} style={styles.waitlistEntry}>
+                                    <div style={styles.waitlistMainLine}>
+                                      <span style={styles.waitlistTime}>
+                                        {entry.appliedAt
+                                          ? new Date(entry.appliedAt).toLocaleTimeString("es-CO", {
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                            })
+                                          : `Pasajero ${index + 1}`}
+                                      </span>
+                                      <span style={styles.waitlistText}>
+                                        {entry.origin?.address || "Origen desconocido"} →{" "}
+                                        {entry.destination?.address || "Destino desconocido"}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        style={styles.waitlistAcceptButton}
+                                        onClick={() => handleAcceptPassenger(trip.trip_id, entry.user_id)}
+                                      >
+                                        Aceptar
+                                      </button>
+                                    </div>
+                                    <div style={styles.waitlistSubLine}>
+                                      Código: {entry.user_id || "N/A"}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <span style={styles.metaValue}>Nadie todavía</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={styles.metaItem}>
+                            <span style={styles.metaLabel}>Pasajeros confirmados:</span>
+                            <div style={styles.waitlistContainer}>
+                              {Array.isArray(trip.passenger_list) && trip.passenger_list.length > 0 ? (
+                                trip.passenger_list.map((entry: any, index: number) => (
+                                  <div key={index} style={styles.waitlistEntry}>
+                                    <div style={styles.waitlistMainLine}>
+                                      <span style={{ ...styles.waitlistTime, color: "#28a745" }}>
+                                        {entry.appliedAt
+                                          ? new Date(entry.appliedAt).toLocaleTimeString("es-CO", {
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                            })
+                                          : `Pasajero ${index + 1}`}
+                                      </span>
+                                      <span style={styles.waitlistText}>
+                                        {entry.origin?.address || "Origen desconocido"} →{" "}
+                                        {entry.destination?.address || "Destino desconocido"}
+                                      </span>
+                                    </div>
+                                    <div style={styles.waitlistSubLine}>
+                                      Código: {entry.user_id || "N/A"}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <span style={styles.metaValue}>Nadie todavía</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -772,6 +1008,113 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 14,
     textAlign: "left",
+  },
+  tabsContainer: {
+    marginBottom: 16,
+  },
+  tabsWrapper: {
+    position: "relative",
+    display: "flex",
+    background: "#f1f5f9",
+    borderRadius: 12,
+    padding: 4,
+    gap: 0,
+  },
+  tabButton: {
+    flex: 1,
+    padding: "10px 20px",
+    background: "transparent",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: 15,
+    fontWeight: 600,
+    transition: "color 0.2s ease",
+    position: "relative",
+    zIndex: 1,
+  },
+  tabButtonActive: {
+    fontWeight: 700,
+  },
+  tabIndicator: {
+    position: "absolute",
+    top: 4,
+    left: 4,
+    width: "calc(50% - 4px)",
+    height: "calc(100% - 8px)",
+    borderRadius: 8,
+    background: "#ffffff",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+    zIndex: 0,
+  },
+  tripActions: {
+    padding: "12px 0",
+    borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+    marginTop: 12,
+  },
+  detailsButton: {
+    background: "transparent",
+    border: "1px solid rgba(0, 0, 0, 0.2)",
+    borderRadius: 8,
+    padding: "8px 16px",
+    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "inherit",
+  },
+  detailsPanel: {
+    marginTop: 16,
+    padding: "16px",
+    background: "rgba(0, 0, 0, 0.03)",
+    borderRadius: 12,
+    display: "grid",
+    gap: 12,
+  },
+  waitlistContainer: {
+    display: "grid",
+    gap: 8,
+    marginTop: 8,
+  },
+  waitlistEntry: {
+    padding: "12px",
+    background: "rgba(0, 0, 0, 0.05)",
+    borderRadius: 8,
+    display: "grid",
+    gap: 6,
+  },
+  waitlistMainLine: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  waitlistTime: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#64748b",
+    minWidth: 60,
+  },
+  waitlistText: {
+    flex: 1,
+    fontSize: 14,
+    color: "inherit",
+  },
+  waitlistSubLine: {
+    fontSize: 12,
+    color: "#64748b",
+    marginLeft: 72,
+  },
+  waitlistAcceptButton: {
+    background: "#28a745",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+    padding: "6px 16px",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 600,
+    transition: "background 0.2s",
   },
 };
 
