@@ -1,72 +1,116 @@
-"use client";
+'use client';
 
-import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { api } from "@/lib/api";
+import Link from "next/link";
+import { auth } from "@/lib/firebaseClient";
+import { verifyPasswordResetCode, confirmPasswordReset } from "firebase/auth";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-function ResetPasswordContent() {
-  const router = useRouter();
+export default function ResetPasswordPage() {
   const searchParams = useSearchParams();
-  const email = searchParams.get("email") || "";
-  const resetToken = searchParams.get("token") || "";
+  const router = useRouter();
+  const oobCode = searchParams.get("oobCode");
 
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const [ok, setOk] = useState("");
+  const [verifying, setVerifying] = useState(true);
+  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
+  const [pwd, setPwd] = useState("");
+  const [pwd2, setPwd2] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.matchMedia("(max-width: 768px)").matches);
+    const verify = async () => {
+      setVerifying(true);
+      try {
+        if (!oobCode) throw { code: "missing-oob" };
+        const email = await verifyPasswordResetCode(auth as any, oobCode);
+        setVerifiedEmail(email);
+      } catch (e: any) {
+        console.error("verify error:", e.code || e.message);
+        if (e.code === "auth/expired-action-code") {
+          setErr("El enlace ha expirado. Solicita uno nuevo.");
+        } else if (e.code === "auth/invalid-action-code" || e.code === "missing-oob") {
+          setErr("El enlace no es válido. Abre de nuevo el correo de recuperación.");
+        } else {
+          setErr("No pudimos validar el enlace. Intenta de nuevo.");
+        }
+      } finally {
+        setVerifying(false);
+      }
     };
+
+    verify();
+  }, [oobCode]);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.matchMedia("(max-width: 768px)").matches);
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  const handleReset = async () => {
-    setErr("");
-    setOk("");
+  const validatePassword = (password: string, email?: string | null): string | null => {
+    if (!password || password.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
+    if (!/[a-z]/.test(password)) return "La contraseña debe tener al menos una letra minúscula.";
+    if (!/[A-Z]/.test(password)) return "La contraseña debe tener al menos una letra mayúscula.";
+    if (!/[0-9]/.test(password)) return "La contraseña debe tener al menos un número.";
+    if (email) {
+      const local = email.split("@")[0];
+      if (password === email) return "La contraseña no puede ser igual al correo.";
+      if (password === local) return "La contraseña no puede ser igual a la parte local del correo.";
+    }
+    return null;
+  };
 
-    if (!newPassword || newPassword.length < 6) {
-      setErr("La contraseña debe tener al menos 6 caracteres");
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    const validationError = validatePassword(pwd, verifiedEmail);
+    if (validationError) return setErr(validationError);
+    if (pwd !== pwd2) {
+      setErr("Las contraseñas no coinciden.");
       return;
     }
-
-    if (newPassword !== confirmPassword) {
-      setErr("Las contraseñas no coinciden");
-      return;
-    }
-
-    if (!resetToken) {
-      setErr("Token de reset no válido. Regresa e intenta nuevamente.");
-      return;
-    }
-
-    setLoading(true);
-
     try {
-      await api.post("/api/auth/reset-password", {
-        resetToken: resetToken,
-        newPassword: newPassword,
-      });
-
-      setOk("Contraseña actualizada correctamente. Redirigiendo al login...");
-      await delay(2000);
-
-      // Redirigir al login
-      router.push("/pages/login");
+      if (!oobCode) throw new Error("missing-oob");
+      await confirmPasswordReset(auth as any, oobCode, pwd);
+      setDone(true);
+      setTimeout(() => router.push("/pages/login"), 2000);
     } catch (e: any) {
-      setErr(e.message || "Error al actualizar la contraseña");
-    } finally {
-      setLoading(false);
+      console.error("confirm error:", e.code, e.message);
+      if (e.code === "auth/expired-action-code") setErr("El enlace expiró. Solicita uno nuevo.");
+      else if (e.code === "auth/invalid-action-code") setErr("El enlace no es válido. Vuelve a abrirlo desde el correo.");
+      else if (e.code === "auth/weak-password") setErr("La contraseña es muy débil. Usa al menos 6 caracteres.");
+      else setErr("No pudimos actualizar la contraseña. Intenta de nuevo.");
     }
   };
+
+  if (verifying) {
+    return <div style={S.shell}><div style={S.card}>Verificando enlace...</div></div>;
+  }
+  if (err && !done) {
+    return (
+      <div style={S.shell}>
+        <div style={S.card}>
+          <h1 style={{ margin: 0 }}>Reset your password</h1>
+          <p style={{ color: "red" }}>{err}</p>
+          <Link href="/recover-password" style={S.link}>Solicitar un nuevo enlace</Link>
+        </div>
+      </div>
+    );
+  }
+  if (done) {
+    return (
+      <div style={S.shell}>
+        <div style={S.card}>
+          <h1 style={{ margin: 0 }}>Contraseña actualizada</h1>
+          <p>Redirigiendo al login…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={S.shell}>
@@ -88,20 +132,24 @@ function ResetPasswordContent() {
 
             {/* Título */}
             <h1 style={{ ...S.title, fontSize: isMobile ? 28 : 36 }}>
-              Nueva contraseña
+              Restablecer contraseña
             </h1>
 
             {/* Subtítulo */}
-            <p style={S.subtitle}>Ingresa tu nueva contraseña</p>
+            <p style={S.subtitle}>
+              {verifiedEmail
+                ? <>Escribe una nueva contraseña para <b>{verifiedEmail}</b></>
+                : "Escribe una nueva contraseña segura."}
+            </p>
 
             {/* Campo Nueva contraseña */}
             <label style={S.label}>Nueva contraseña</label>
             <input
               style={{ ...S.input, height: isMobile ? 44 : 46 }}
               type="password"
-              placeholder="Mínimo 6 caracteres"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Mínimo 8 caracteres, mayúscula, minúscula, número"
+              value={pwd}
+              onChange={(e) => setPwd(e.target.value)}
               autoComplete="new-password"
             />
 
@@ -111,40 +159,33 @@ function ResetPasswordContent() {
               style={{ ...S.input, height: isMobile ? 44 : 46 }}
               type="password"
               placeholder="Confirma tu contraseña"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              value={pwd2}
+              onChange={(e) => setPwd2(e.target.value)}
               autoComplete="new-password"
             />
 
             {err && <div style={S.error}>{err}</div>}
-            {ok && <div style={S.success}>{ok}</div>}
+            {done && (
+              <div style={S.success}>
+                Tu contraseña se actualizó correctamente.{" "}
+                <span style={{ color: "#000" }}>Redirigiéndote al login…</span>
+              </div>
+            )}
 
-            {/* Botón Actualizar contraseña */}
+            {/* Botón Guardar */}
             <button
-              style={{
-                ...S.submitButton,
-                height: isMobile ? 44 : 46,
-                opacity: loading ? 0.7 : 1,
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-              onClick={handleReset}
-              disabled={loading || !newPassword || !confirmPassword}
+              style={{ ...S.submitButton, height: isMobile ? 44 : 46 }}
+              onClick={onSubmit as any}
             >
-              {loading ? "Actualizando..." : "Actualizar contraseña"}
+              Guardar contraseña
             </button>
 
             {/* Link para volver al login */}
-            <button
-              type="button"
-              onClick={() => router.push("/pages/login")}
-              style={S.loginLink}
-            >
-              Volver al login
-            </button>
+            <Link href="/pages/login" style={S.loginLink}>Volver al login</Link>
           </div>
         </div>
 
-        {/* DERECHA - IMAGEN */}
+        {/* DERECHA - IMAGEN (solo desktop) */}
         {!isMobile && (
           <div style={S.rightPane}>
             <div style={S.imageContainer}>
@@ -163,22 +204,27 @@ function ResetPasswordContent() {
   );
 }
 
-export default function ResetPassword() {
-  return (
-    <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>Cargando...</div>}>
-      <ResetPasswordContent />
-    </Suspense>
-  );
-}
-
-/* ------------------ ESTILOS ------------------ */
-const S = {
+const S: any = {
   shell: {
     width: "100vw",
     height: "100vh",
     background: "#f5f6f8",
     display: "grid",
     placeItems: "center",
+  },
+  card: {
+    background: "#fff",
+    borderRadius: 12,
+    boxShadow: "0 18px 50px rgba(0,0,0,0.12)",
+    padding: 24,
+    maxWidth: 480,
+    margin: "0 auto",
+  },
+  link: {
+    display: "inline-block",
+    marginTop: 4,
+    color: "#0126B9",
+    textDecoration: "underline",
   },
   canvas: {
     position: "relative" as const,
@@ -198,6 +244,9 @@ const S = {
   rightPane: {
     position: "relative" as const,
     overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    paddingRight: 12,
   },
   imageContainer: {
     position: "relative" as const,
@@ -262,15 +311,12 @@ const S = {
   },
   loginLink: {
     marginTop: 16,
-    background: "transparent",
-    border: "none",
-    padding: 0,
     color: "#0126B9",
+    textDecoration: "underline",
     fontWeight: 400,
     fontSize: 14,
     cursor: "pointer",
     width: "fit-content",
-    textAlign: "left" as const,
   },
   error: {
     background: "#ffeef0",
@@ -290,4 +336,6 @@ const S = {
     marginTop: 8,
   },
 };
+
+
 

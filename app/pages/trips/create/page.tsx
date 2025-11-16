@@ -82,12 +82,7 @@ export default function TripCreatePage() {
   // Debug: mostrar estado del usuario
   useEffect(() => {
     console.log("🔍 User context in trips/create:", {
-      user: user ? {
-        uid: user.uid,
-        is_driver: user.is_driver,
-        roles: user.roles,
-        hasCar: user.hasCar,
-      } : null,
+      user: user ? { uid: user.uid } : null,
       role,
       canBeDriver,
     });
@@ -150,18 +145,19 @@ export default function TripCreatePage() {
         }
 
         try {
-          const me = await api.get("/api/me", token);
-          if (me) {
+          const { auth: clientAuth } = await import("@/lib/firebaseClient");
+          const fb = clientAuth?.currentUser;
+          if (fb) {
+            const parts = (fb.displayName || "").split(" ");
             setUserData({
-              uid: me.uid,
-              first_name: me.first_name,
-              last_name: me.last_name,
-              email: me.email,
-              user_photo: me.user_photo,
+              uid: fb.uid,
+              first_name: parts[0] || "",
+              last_name: parts.slice(1).join(" ") || "",
+              email: fb.email || "",
+              user_photo: fb.photoURL || null,
             });
-            // Refrescar el contexto de usuario para asegurar datos actualizados
-            await refreshUser();
           }
+          await refreshUser();
         } catch (userError) {
           console.error("Error fetching user data:", userError);
           setError("No se pudo cargar la información del usuario");
@@ -529,7 +525,7 @@ export default function TripCreatePage() {
                   try {
                     const token = await ensureValidToken();
                     if (token) {
-                      const freshUserData = await api.get("/api/me", token);
+                      const freshUserData = null;
                       const vehiclesResp = await api.get("/api/vehicles", token);
                       const freshVehicles = Array.isArray(vehiclesResp?.vehicles) ? vehiclesResp.vehicles : [];
                       if (freshUserData) {

@@ -86,7 +86,7 @@ export default function SettingsPage() {
         return;
       }
 
-      const userData = await api.get("/api/me", validToken);
+      const userData = null;
       if (userData) {
         const first = (userData.first_name || "").trim();
         const last = (userData.last_name || "").trim();
@@ -231,7 +231,7 @@ export default function SettingsPage() {
         
         try {
           // Obtener información del usuario desde el backend
-          const userData = await api.get("/api/me", validToken);
+          const userData = null;
           if (!userData || !userData.email) {
             throw new Error(savedLanguage === "es" 
               ? "No se pudo obtener la información del usuario. Por favor, inicia sesión nuevamente."

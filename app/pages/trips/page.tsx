@@ -74,7 +74,7 @@ export default function MyTripsPage() {
         }
 
         // Obtener datos del usuario
-        const meResponse = await api.get("/api/me", token);
+        const meResponse = null;
         if (meResponse) {
           setUserData(meResponse);
         }

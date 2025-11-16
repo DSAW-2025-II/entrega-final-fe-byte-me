@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { ensureValidToken } from "@/lib/auth";
-import { auth } from "@/lib/firebase";
+import { auth as clientAuth } from "@/lib/firebaseClient";
 import { signOut } from "firebase/auth";
-import { initializeFirebase } from "@/lib/firebase";
 import { useTheme } from "@/app/contexts/ThemeContext";
 
 export default function HelpPage() {
@@ -35,7 +34,7 @@ export default function HelpPage() {
     },
     {
       question: "¿Qué hago si olvidé mi contraseña?",
-      answer: "Si olvidaste tu contraseña, ve a la página de inicio de sesión y haz clic en 'Recuperar contraseña'. Ingresa tu correo institucional (@unisabana.edu.co) y recibirás un código de verificación por correo. Sigue las instrucciones para restablecer tu contraseña."
+      answer: "Ve a la pantalla de inicio de sesión y haz clic en '¿Olvidaste tu contraseña?'. Ingresa tu correo institucional (@unisabana.edu.co) y te enviaremos un enlace para restablecerla."
     }
   ] : [
     {
@@ -48,7 +47,7 @@ export default function HelpPage() {
     },
     {
       question: "What do I do if I forgot my password?",
-      answer: "If you forgot your password, go to the login page and click 'Recover password'. Enter your institutional email (@unisabana.edu.co) and you will receive a verification code by email. Follow the instructions to reset your password."
+      answer: "Go to the login page and click 'Forgot your password?'. Enter your institutional email (@unisabana.edu.co) and you'll receive a reset link."
     }
   ];
 
@@ -73,21 +72,14 @@ export default function HelpPage() {
 
   const fetchUserData = async () => {
     try {
-      const validToken = await ensureValidToken();
-      if (!validToken) {
+      const { auth: clientAuth } = await import("@/lib/firebaseClient");
+      const u = clientAuth?.currentUser;
+      if (!u) {
         router.push("/pages/login");
         return;
       }
-
-      const userData = await api.get("/api/me", validToken);
-      if (userData) {
-        const first = (userData.first_name || "").trim();
-        const last = (userData.last_name || "").trim();
-        const full = (first || last)
-          ? `${first} ${last}`.trim()
-          : (userData.email ? userData.email.split("@")[0] : "User");
-        setUserName(full);
-      }
+      const full = u.displayName || (u.email ? u.email.split("@")[0] : "User");
+      setUserName(full);
     } catch (error) {
       console.error("Error fetching user data:", error);
     } finally {
@@ -97,12 +89,11 @@ export default function HelpPage() {
 
   const handleLogout = async () => {
     try {
-      initializeFirebase();
-      if (!auth) {
+      if (!clientAuth) {
         router.replace("/pages/login");
         return;
       }
-      await signOut(auth);
+      await signOut(clientAuth);
       router.replace("/pages/login");
       setTimeout(() => window.location.replace("/pages/login"), 0);
     } catch (e) {
@@ -126,15 +117,11 @@ export default function HelpPage() {
       let userName = "";
       
       try {
-        const validToken = await ensureValidToken();
-        if (validToken) {
-          const userData = await api.get("/api/me", validToken);
-          if (userData) {
-            userEmail = userData.email || "";
-            const first = (userData.first_name || "").trim();
-            const last = (userData.last_name || "").trim();
-            userName = (first || last) ? `${first} ${last}`.trim() : "";
-          }
+        const { auth: clientAuth } = await import("@/lib/firebaseClient");
+        const u = clientAuth?.currentUser;
+        if (u) {
+          userEmail = u.email || "";
+          userName = u.displayName || "";
         }
       } catch (error) {
         console.warn("No se pudo obtener información del usuario:", error);
@@ -179,15 +166,11 @@ export default function HelpPage() {
       let currentUserName = "";
       
       try {
-        const validToken = await ensureValidToken();
-        if (validToken) {
-          const userData = await api.get("/api/me", validToken);
-          if (userData) {
-            userEmail = userData.email || "";
-            const first = (userData.first_name || "").trim();
-            const last = (userData.last_name || "").trim();
-            currentUserName = (first || last) ? `${first} ${last}`.trim() : "";
-          }
+        const { auth: clientAuth } = await import("@/lib/firebaseClient");
+        const u = clientAuth?.currentUser;
+        if (u) {
+          userEmail = u.email || "";
+          currentUserName = u.displayName || "";
         }
       } catch (error) {
         console.warn("No se pudo obtener información del usuario:", error);
