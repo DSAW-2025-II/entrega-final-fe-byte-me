@@ -33,6 +33,7 @@ interface Vehicle {
 
 interface UserData {
   uid: string;
+  user_id?: string;
   first_name?: string;
   last_name?: string;
   email?: string;
@@ -57,6 +58,7 @@ export default function TripCreatePage() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [fare, setFare] = useState("");
   const [seats, setSeats] = useState("");
+  const [extraMinutes, setExtraMinutes] = useState("10");
   const [posting, setPosting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -145,16 +147,15 @@ export default function TripCreatePage() {
         }
 
         try {
-          const { auth: clientAuth } = await import("@/lib/firebaseClient");
-          const fb = clientAuth?.currentUser;
-          if (fb) {
-            const parts = (fb.displayName || "").split(" ");
+          const meResponse = await api.get("/api/me", token);
+          if (meResponse) {
             setUserData({
-              uid: fb.uid,
-              first_name: parts[0] || "",
-              last_name: parts.slice(1).join(" ") || "",
-              email: fb.email || "",
-              user_photo: fb.photoURL || null,
+              uid: meResponse.uid || "",
+              user_id: meResponse.user_id || undefined,
+              first_name: meResponse.first_name || "",
+              last_name: meResponse.last_name || "",
+              email: meResponse.email || "",
+              user_photo: meResponse.user_photo || null,
             });
           }
           await refreshUser();
@@ -233,6 +234,64 @@ export default function TripCreatePage() {
   useEffect(() => {
     fetchAvailableTrips();
   }, [fetchAvailableTrips]);
+
+  const handleApplyToTrip = useCallback(async (tripId: string) => {
+    if (!userData?.user_id) {
+      alert("No se pudo obtener tu información de usuario. Por favor, inicia sesión nuevamente.");
+      return;
+    }
+
+    try {
+      const token = await ensureValidToken();
+      if (!token) {
+        alert("No estás autenticado. Inicia sesión nuevamente.");
+        return;
+      }
+
+      const response = await api.patch(
+        "/api/trips",
+        {
+          trip_id: tripId,
+          user_id: userData.user_id,
+          origin: tripFrom && tripFromCoord
+            ? {
+                address: tripFrom,
+                coordinates: {
+                  lat: tripFromCoord.lat,
+                  lng: tripFromCoord.lng,
+                },
+              }
+            : null,
+          destination: tripTo && tripToCoord
+            ? {
+                address: tripTo,
+                coordinates: {
+                  lat: tripToCoord.lat,
+                  lng: tripToCoord.lng,
+                },
+              }
+            : null,
+        },
+        token
+      );
+
+      if (response) {
+        setFeedback("¡Te has aplicado al viaje exitosamente!");
+        // Refrescar los viajes disponibles
+        await fetchAvailableTrips();
+      }
+    } catch (error: any) {
+      console.error("Error applying to trip:", error);
+      const errorMessage = error?.message || error?.error || "No se pudo aplicar al viaje. Intenta nuevamente.";
+      if (errorMessage.includes("already in waitlist")) {
+        alert("Ya te has aplicado a este viaje.");
+      } else if (errorMessage.includes("cannot apply to your own trip") || errorMessage.includes("own trip")) {
+        alert("No puedes aplicar a tu propio viaje.");
+      } else {
+        alert(errorMessage);
+      }
+    }
+  }, [userData, tripFrom, tripFromCoord, tripTo, tripToCoord, fetchAvailableTrips]);
 
   const userName = useMemo(() => {
     if (!userData) return "Usuario";
@@ -330,6 +389,7 @@ export default function TripCreatePage() {
     setSelectedVehicle(null);
     setFare("");
     setSeats("");
+    setExtraMinutes("10");
     setShowVehicleModal(true);
   };
 
@@ -339,6 +399,7 @@ export default function TripCreatePage() {
     setSelectedVehicle(null);
     setFare("");
     setSeats("");
+    setExtraMinutes("10");
     // Al cancelar, redirigir al landing
     router.push("/pages/login/landing");
   };
@@ -348,6 +409,7 @@ export default function TripCreatePage() {
     setFare("");
     const defaultSeats = Math.max((vehicle.capacity || 1) - 1, 1);
     setSeats(String(defaultSeats));
+    setExtraMinutes("10");
   };
 
   const handleCreateTrip = async () => {
@@ -361,6 +423,7 @@ export default function TripCreatePage() {
 
     const seatsNumber = Number(seats);
     const fareNumber = Number(fare);
+    const extraMinutesNumber = Number(extraMinutes);
 
     if (!tripFrom || !tripTo) {
       setError("Debes indicar origen y destino");
@@ -389,6 +452,11 @@ export default function TripCreatePage() {
 
     if (!Number.isFinite(fareNumber) || fareNumber <= 0) {
       setError("Ingresa una tarifa válida");
+      return;
+    }
+
+    if (!Number.isFinite(extraMinutesNumber) || extraMinutesNumber < 0) {
+      setError("Ingresa un tiempo de desvío válido (0 o más minutos)");
       return;
     }
 
@@ -423,7 +491,7 @@ export default function TripCreatePage() {
         time: tripTimeIso,
         seats: seatsNumber,
         fare: fareNumber,
-        extra_minutes: 0,
+        extra_minutes: extraMinutesNumber,
         vehicle: {
           vehicle_id: selectedVehicle.vehicle_id,
           license_plate: selectedVehicle.license_plate,
@@ -440,6 +508,7 @@ export default function TripCreatePage() {
         setSelectedVehicle(null);
         setFare("");
         setSeats("");
+        setExtraMinutes("10");
         // Limpiar el borrador
         sessionStorage.removeItem(TRIP_DRAFT_STORAGE_KEY);
         // Redirigir al landing después de un breve delay
@@ -525,18 +594,14 @@ export default function TripCreatePage() {
                   try {
                     const token = await ensureValidToken();
                     if (token) {
-                      const freshUserData = null;
                       const vehiclesResp = await api.get("/api/vehicles", token);
                       const freshVehicles = Array.isArray(vehiclesResp?.vehicles) ? vehiclesResp.vehicles : [];
-                      if (freshUserData) {
-                        if (freshVehicles.length > 0) {
-                          setVehicles(freshVehicles);
-                          setRoleMode("driver");
-                          await refreshUser();
-                        } else {
-                          alert("Debes registrar un vehículo primero. Ve a 'My Car' para agregar tu vehículo.");
-                        }
-                      }
+                      
+                      // Permitir cambiar a modo driver sin restricción de vehículo
+                      // Solo se requiere vehículo para publicar un viaje, no para activar el modo
+                      setVehicles(freshVehicles);
+                      setRoleMode("driver");
+                      await refreshUser();
                     }
                   } catch (error) {
                     console.error("Error revalidating user:", error);
@@ -799,10 +864,11 @@ export default function TripCreatePage() {
                     <button
                       style={{
                         ...styles.availableAction,
-                        ...(isPassenger ? {} : styles.availableActionDisabled),
+                        ...(isPassenger && trip.driver_uid !== userData?.uid ? {} : styles.availableActionDisabled),
                       }}
-                      onClick={() => alert("Funcionalidad para solicitar viaje próximamente")}
-                      disabled={!isPassenger}
+                      onClick={() => handleApplyToTrip(trip.trip_id)}
+                      disabled={!isPassenger || trip.driver_uid === userData?.uid}
+                      title={trip.driver_uid === userData?.uid ? "No puedes aplicar a tu propio viaje" : undefined}
                     >
                       Aplicar al viaje
                     </button>
@@ -891,6 +957,20 @@ export default function TripCreatePage() {
                   disabled={posting}
                 />
 
+                <label style={styles.inputLabel}>Tiempo extra de desvío (minutos)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={extraMinutes}
+                  onChange={(event) => setExtraMinutes(event.target.value)}
+                  style={styles.input}
+                  disabled={posting}
+                  placeholder="10"
+                />
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: -8, marginBottom: 8 }}>
+                  Tiempo adicional que estás dispuesto a salirte de la ruta para recoger pasajeros
+                </div>
 
                 <button
                   type="button"

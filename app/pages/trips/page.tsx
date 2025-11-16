@@ -96,10 +96,10 @@ export default function MyTripsPage() {
 
       // Viajes donde el usuario es PASAJERO usando my_trips del usuario
       if (meResponse?.my_trips && Array.isArray(meResponse.my_trips) && meResponse.my_trips.length > 0) {
-        // Extraer IDs y estados de my_trips
+        // Extraer IDs y estados de my_trips (incluyendo cancelled)
         const myTripIds: string[] = [];
         const statusMap: Record<string, string> = {};
-        
+
         meResponse.my_trips.forEach((item: any) => {
           if (typeof item === "string") {
             myTripIds.push(item);
@@ -199,6 +199,106 @@ export default function MyTripsPage() {
       } catch (err: any) {
         console.error("Error al aceptar pasajero:", err);
         alert(err?.message || "No se pudo aceptar al pasajero.");
+      }
+    },
+    [loadTrips]
+  );
+
+  const handleCancelTrip = useCallback(
+    async (tripId: string) => {
+      if (!confirm("¿Estás seguro de que quieres cancelar este viaje? Esta acción no se puede deshacer.")) {
+        return;
+      }
+
+      try {
+        const token = await ensureValidToken();
+        if (!token) {
+          alert("No estás autenticado. Inicia sesión nuevamente.");
+          return;
+        }
+
+        await api.patch(
+          "/api/trips",
+          {
+            trip_id: tripId,
+            action: "cancel",
+          },
+          token
+        );
+        alert("Viaje cancelado exitosamente.");
+        await loadTrips(); // Refrescar la lista de viajes
+      } catch (err: any) {
+        console.error("Error al cancelar viaje:", err);
+        alert(err?.message || "No se pudo cancelar el viaje.");
+      }
+    },
+    [loadTrips]
+  );
+
+  const handleCancelPassengerParticipation = useCallback(
+    async (tripId: string) => {
+      if (!confirm("¿Estás seguro de que quieres cancelar tu participación en este viaje? Esta acción no se puede deshacer.")) {
+        return;
+      }
+
+      try {
+        const token = await ensureValidToken();
+        if (!token) {
+          alert("No estás autenticado. Inicia sesión nuevamente.");
+          return;
+        }
+
+        if (!userData?.user_id) {
+          alert("No se pudo obtener tu información de usuario. Por favor, inicia sesión nuevamente.");
+          return;
+        }
+
+        await api.patch(
+          "/api/trips",
+          {
+            trip_id: tripId,
+            user_id: userData.user_id,
+            action: "cancel_passenger",
+          },
+          token
+        );
+        alert("Has cancelado tu participación en el viaje exitosamente.");
+        await loadTrips(); // Refrescar la lista de viajes
+      } catch (err: any) {
+        console.error("Error al cancelar participación:", err);
+        alert(err?.message || "No se pudo cancelar tu participación en el viaje.");
+      }
+    },
+    [loadTrips, userData]
+  );
+
+  const handleRemovePassenger = useCallback(
+    async (tripId: string, passengerUserId: string) => {
+      if (!confirm(`¿Estás seguro de que quieres remover a este pasajero (${passengerUserId}) del viaje? Esta acción no se puede deshacer.`)) {
+        return;
+      }
+
+      try {
+        const token = await ensureValidToken();
+        if (!token) {
+          alert("No estás autenticado. Inicia sesión nuevamente.");
+          return;
+        }
+
+        await api.patch(
+          "/api/trips",
+          {
+            trip_id: tripId,
+            user_id: passengerUserId,
+            action: "remove_passenger",
+          },
+          token
+        );
+        alert("Pasajero removido exitosamente.");
+        await loadTrips(); // Refrescar la lista de viajes
+      } catch (err: any) {
+        console.error("Error al remover pasajero:", err);
+        alert(err?.message || "No se pudo remover al pasajero.");
       }
     },
     [loadTrips]
@@ -507,27 +607,59 @@ export default function MyTripsPage() {
                   {filteredTrips.map((trip) => (
                     <div key={trip.trip_id} style={styles.tripCard}>
                       <div style={styles.tripHeader}>
-                        <span
-                          style={{
-                            ...styles.statusBadge,
-                            background:
-                              activeTab === "conductor"
-                                ? trip.status === "open"
-                                  ? "rgba(40,167,69,0.15)"
-                                  : "rgba(108,117,125,0.15)"
+                          <span
+                            style={{
+                              ...styles.statusBadge,
+                              background:
+                                activeTab === "conductor"
+                                  ? trip.status === "open"
+                                    ? "rgba(40,167,69,0.15)"
+                                    : trip.status === "cancelled"
+                                    ? "rgba(220,53,69,0.15)"
+                                    : trip.status === "closed"
+                                    ? "rgba(108,117,125,0.15)"
+                                    : "rgba(108,117,125,0.15)"
+                                  : trip.status === "cancelled"
+                                    ? "rgba(220,53,69,0.15)"
+                                    : myTripsStatus[trip.trip_id] === "accepted"
+                                    ? "rgba(40,167,69,0.15)"
+                                    : myTripsStatus[trip.trip_id] === "cancelled"
+                                    ? "rgba(220,53,69,0.15)"
+                                    : "rgba(255,193,7,0.15)",
+                              color:
+                                activeTab === "conductor"
+                                  ? trip.status === "open"
+                                    ? "#28a745"
+                                    : trip.status === "cancelled"
+                                    ? "#dc3545"
+                                    : trip.status === "closed"
+                                    ? "#6c757d"
+                                    : "#6c757d"
+                                  : trip.status === "cancelled"
+                                    ? "#dc3545"
+                                    : myTripsStatus[trip.trip_id] === "accepted"
+                                    ? "#28a745"
+                                    : myTripsStatus[trip.trip_id] === "cancelled"
+                                    ? "#dc3545"
+                                    : "#ffc107",
+                            }}
+                          >
+                            {activeTab === "conductor"
+                              ? trip.status === "open"
+                                ? "Abierto"
+                                : trip.status === "cancelled"
+                                ? "Cancelado"
+                                : trip.status === "closed"
+                                ? "Cerrado"
+                                : trip.status || "Desconocido"
+                              : trip.status === "cancelled"
+                                ? "Cancelado"
                                 : myTripsStatus[trip.trip_id] === "accepted"
-                                  ? "rgba(40,167,69,0.15)"
-                                  : "rgba(255,193,7,0.15)",
-                            color:
-                              activeTab === "conductor"
-                                ? trip.status === "open" ? "#28a745" : "#6c757d"
-                                : myTripsStatus[trip.trip_id] === "accepted" ? "#28a745" : "#ffc107",
-                          }}
-                        >
-                          {activeTab === "conductor"
-                            ? trip.status === "open" ? "Abierto" : trip.status || "Desconocido"
-                            : myTripsStatus[trip.trip_id] === "accepted" ? "Aceptado" : "En lista de espera"}
-                        </span>
+                                ? "Aceptado"
+                                : myTripsStatus[trip.trip_id] === "cancelled"
+                                ? "Cancelado"
+                                : "En lista de espera"}
+                          </span>
                         <div style={styles.tripFare}>
                           ${Number(trip.fare || 0).toLocaleString("es-CO")}
                         </div>
@@ -583,6 +715,34 @@ export default function MyTripsPage() {
                         </div>
                       )}
 
+                      {activeTab === "pasajero" && myTripsStatus[trip.trip_id] === "accepted" && trip.status !== "cancelled" && (
+                        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                          <button
+                            type="button"
+                            style={{
+                              padding: "8px 16px",
+                              borderRadius: 8,
+                              border: "1px solid #dc3545",
+                              background: "#dc3545",
+                              color: "#ffffff",
+                              fontSize: 14,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              transition: "background 0.2s ease, transform 0.1s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#c82333";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "#dc3545";
+                            }}
+                            onClick={() => handleCancelPassengerParticipation(trip.trip_id)}
+                          >
+                            Cancelar participación
+                          </button>
+                        </div>
+                      )}
+
                       {activeTab === "conductor" && expandedTripId === trip.trip_id && (
                         <div style={styles.detailsPanel}>
                           <div style={styles.metaItem}>
@@ -597,8 +757,44 @@ export default function MyTripsPage() {
                           </div>
                           <div style={styles.metaItem}>
                             <span style={styles.metaLabel}>Estado:</span>
-                            <span style={styles.metaValue}>{trip.status || "—"}</span>
+                            <span style={styles.metaValue}>
+                              {trip.status === "open"
+                                ? "Abierto"
+                                : trip.status === "cancelled"
+                                ? "Cancelado"
+                                : trip.status === "closed"
+                                ? "Cerrado"
+                                : trip.status || "—"}
+                            </span>
                           </div>
+
+                          {trip.status === "open" && (
+                            <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                              <button
+                                type="button"
+                                style={{
+                                  padding: "8px 16px",
+                                  borderRadius: 8,
+                                  border: "1px solid #dc3545",
+                                  background: "#dc3545",
+                                  color: "#ffffff",
+                                  fontSize: 14,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  transition: "background 0.2s ease, transform 0.1s ease",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "#c82333";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "#dc3545";
+                                }}
+                                onClick={() => handleCancelTrip(trip.trip_id)}
+                              >
+                                Cancelar viaje
+                              </button>
+                            </div>
+                          )}
 
                           <div style={styles.metaItem}>
                             <span style={styles.metaLabel}>En lista de espera:</span>
@@ -625,6 +821,30 @@ export default function MyTripsPage() {
                                         onClick={() => handleAcceptPassenger(trip.trip_id, entry.user_id)}
                                       >
                                         Aceptar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: "4px 10px",
+                                          borderRadius: 6,
+                                          border: "1px solid #dc3545",
+                                          background: "#dc3545",
+                                          color: "#ffffff",
+                                          fontSize: 12,
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          whiteSpace: "nowrap",
+                                          transition: "background 0.2s ease",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.background = "#c82333";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.background = "#dc3545";
+                                        }}
+                                        onClick={() => handleRemovePassenger(trip.trip_id, entry.user_id)}
+                                      >
+                                        Cancelar
                                       </button>
                                     </div>
                                     <div style={styles.waitlistSubLine}>
@@ -657,6 +877,31 @@ export default function MyTripsPage() {
                                         {entry.origin?.address || "Origen desconocido"} →{" "}
                                         {entry.destination?.address || "Destino desconocido"}
                                       </span>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          marginLeft: "auto",
+                                          padding: "4px 10px",
+                                          borderRadius: 6,
+                                          border: "1px solid #dc3545",
+                                          background: "#dc3545",
+                                          color: "#ffffff",
+                                          fontSize: 12,
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          whiteSpace: "nowrap",
+                                          transition: "background 0.2s ease",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.background = "#c82333";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.background = "#dc3545";
+                                        }}
+                                        onClick={() => handleRemovePassenger(trip.trip_id, entry.user_id)}
+                                      >
+                                        Cancelar
+                                      </button>
                                     </div>
                                     <div style={styles.waitlistSubLine}>
                                       Código: {entry.user_id || "N/A"}
