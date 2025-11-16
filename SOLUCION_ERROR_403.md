@@ -90,3 +90,5 @@ Después de configurar, recarga la página y verifica:
 - ✅ El autocompletado funciona
 - ✅ No hay errores 403 en la consola
 
+
+

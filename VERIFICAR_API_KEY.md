@@ -92,3 +92,5 @@ Si necesitas probar rápidamente sin restricciones:
 
 ⚠️ **IMPORTANTE**: Vuelve a configurar restricciones antes de producción.
 
+
+

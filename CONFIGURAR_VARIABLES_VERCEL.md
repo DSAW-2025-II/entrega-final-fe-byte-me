@@ -129,3 +129,5 @@ Asegúrate de tener estas 6 variables mínimas:
 4. Limpia la caché del navegador (Ctrl+Shift+Delete)
 5. Verifica en la consola del navegador si hay errores específicos
 
+
+
