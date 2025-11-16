@@ -78,6 +78,15 @@ export default function SettingsPage() {
     checkAuth();
   }, [router, savedLanguage, savedTheme, savedNotifications]);
 
+  type UserData = {
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    user_id?: string;
+    email?: string;
+    [key: string]: any;
+  };
+
   const fetchUserData = async () => {
     try {
       const validToken = await ensureValidToken();
@@ -86,15 +95,14 @@ export default function SettingsPage() {
         return;
       }
 
-      const userData = null;
-      if (userData) {
-        const first = (userData.first_name || "").trim();
-        const last = (userData.last_name || "").trim();
-        const full = (first || last)
-          ? `${first} ${last}`.trim()
-          : (userData.email ? userData.email.split("@")[0] : "User");
-        setUserName(full);
-      }
+      const userData: UserData | null = null;
+      const safeUser = (userData ?? {}) as UserData;
+      const first = (safeUser.first_name ?? "").trim();
+      const last = (safeUser.last_name ?? "").trim();
+      const full = (first || last)
+        ? `${first} ${last}`.trim()
+        : (safeUser.email ? safeUser.email.split("@")[0] : "User");
+      setUserName(full);
     } catch (error) {
       console.error("Error fetching user data:", error);
     } finally {
@@ -231,7 +239,7 @@ export default function SettingsPage() {
         
         try {
           // Obtener información del usuario desde el backend
-          const userData = null;
+          const userData = await api.get("/api/me", validToken);
           if (!userData || !userData.email) {
             throw new Error(savedLanguage === "es" 
               ? "No se pudo obtener la información del usuario. Por favor, inicia sesión nuevamente."
