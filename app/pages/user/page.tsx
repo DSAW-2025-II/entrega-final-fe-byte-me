@@ -75,20 +75,19 @@ export default function UserPage() {
           return;
         }
 
-        const userData = await api.get("/api/me", validToken);
-        if (userData) {
-          setMe({
-            user_id: userData.user_id || userData.uid || "",
-            first_name: userData.first_name || "",
-            last_name: userData.last_name || "",
-            email: userData.email || "",
-            phone: userData.phone || "",
-            user_photo: userData.user_photo || "",
-            city: userData.city || "",
-            address: userData.address || "",
-            nearby_landmark: userData.nearby_landmark || "",
-          });
-        }
+        const { auth: clientAuth } = await import("@/lib/firebaseClient");
+        const u = clientAuth?.currentUser;
+        setMe({
+          user_id: u?.uid || "",
+          first_name: (u?.displayName || "").split(" ")[0] || "",
+          last_name: (u?.displayName || "").split(" ").slice(1).join(" ") || "",
+          email: u?.email || "",
+          phone: "",
+          user_photo: u?.photoURL || "",
+          city: "",
+          address: "",
+          nearby_landmark: "",
+        });
       } catch (error) {
         console.error("Error fetching user data:", error);
         router.push("/pages/login");

@@ -26,8 +26,6 @@ interface Trip {
     name?: string;
     photo?: string;
   };
-  driver_uid?: string;
-  waitlist?: string[];
   vehicle?: {
     model?: string;
     license_plate?: string;
@@ -40,13 +38,11 @@ export default function MyTripsPage() {
   const { theme } = useTheme();
   const { user, refreshUser } = useUser();
   const [loading, setLoading] = useState(true);
-  const [driverTrips, setDriverTrips] = useState<Trip[]>([]);
-  const [passengerTrips, setPassengerTrips] = useState<Trip[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [userData, setUserData] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
-  const [activeTab, setActiveTab] = useState<"conductor" | "pasajero">("conductor");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -77,34 +73,18 @@ export default function MyTripsPage() {
           return;
         }
 
-        // Obtener datos del usuario (para uid y user_id)
-        const meResponse = await api.get("/api/me", token);
-        console.log("👤 MyTrips /api/me response:", meResponse);
+        // Obtener datos del usuario
+        const meResponse = null;
         if (meResponse) {
           setUserData(meResponse);
         }
 
-        // Viajes donde el usuario es CONDUCTOR
-        const driverResp = await api.get("/api/trips", token);
-        if (driverResp && Array.isArray(driverResp.trips)) {
-          setDriverTrips(driverResp.trips);
+        // Obtener viajes
+        const response = await api.get("/api/trips", token);
+        if (response && Array.isArray(response.trips)) {
+          setTrips(response.trips);
         } else {
-          setDriverTrips([]);
-        }
-
-        // Viajes donde el usuario es PASAJERO usando my_trips del usuario
-        if (meResponse?.my_trips && Array.isArray(meResponse.my_trips) && meResponse.my_trips.length > 0) {
-          const myTripIds: string[] = meResponse.my_trips;
-          const query = encodeURIComponent(myTripIds.join(","));
-          const passengerResp = await api.get(`/api/trips?ids=${query}`, token);
-          console.log("🚌 MyTrips passenger trips resp:", passengerResp);
-          if (passengerResp && Array.isArray(passengerResp.trips)) {
-            setPassengerTrips(passengerResp.trips);
-          } else {
-            setPassengerTrips([]);
-          }
-        } else {
-          setPassengerTrips([]);
+          setTrips([]);
         }
       } catch (err: any) {
         console.error("Error fetching data:", err);
@@ -145,13 +125,6 @@ export default function MyTripsPage() {
     const email = base.email || (base.user_email ?? "");
     return name || (email ? email.split("@")[0] : "Usuario");
   }, [userData, user]);
-
-  const filteredTrips = useMemo(() => {
-    if (activeTab === "conductor") {
-      return driverTrips;
-    }
-    return passengerTrips;
-  }, [activeTab, driverTrips, passengerTrips]);
 
   const pageStyle = useMemo(
     () => ({
@@ -321,52 +294,6 @@ export default function MyTripsPage() {
               My trips
             </h2>
 
-            <div style={styles.tabsContainer}>
-              <div
-                style={{
-                  ...styles.tabsWrapper,
-                  background: theme === "dark" ? "#1a1a1a" : "#f1f5f9",
-                }}
-              >
-                <button
-                  type="button"
-                  style={{
-                    ...styles.tabButton,
-                    ...(activeTab === "conductor" ? styles.tabButtonActive : {}),
-                    color: activeTab === "conductor" 
-                      ? (theme === "dark" ? "#ededed" : "#0f2230")
-                      : (theme === "dark" ? "#a0a0a0" : "#64748b"),
-                  }}
-                  onClick={() => setActiveTab("conductor")}
-                >
-                  Conductor
-                </button>
-                <button
-                  type="button"
-                  style={{
-                    ...styles.tabButton,
-                    ...(activeTab === "pasajero" ? styles.tabButtonActive : {}),
-                    color: activeTab === "pasajero"
-                      ? (theme === "dark" ? "#ededed" : "#0f2230")
-                      : (theme === "dark" ? "#a0a0a0" : "#64748b"),
-                  }}
-                  onClick={() => setActiveTab("pasajero")}
-                >
-                  Pasajero
-                </button>
-                <div
-                  style={{
-                    ...styles.tabIndicator,
-                    transform: activeTab === "conductor" ? "translateX(0)" : "translateX(100%)",
-                    background: theme === "dark" ? "#2a2a2a" : "#ffffff",
-                    boxShadow: theme === "dark" 
-                      ? "0 1px 3px rgba(0, 0, 0, 0.3)" 
-                      : "0 1px 3px rgba(0, 0, 0, 0.1)",
-                  }}
-                />
-              </div>
-            </div>
-
             {userData && (
               <section
                 style={{
@@ -434,54 +361,37 @@ export default function MyTripsPage() {
             >
               {error && <div style={styles.errorBox}>{error}</div>}
 
-              {filteredTrips.length === 0 ? (
+              {trips.length === 0 ? (
                 <div style={styles.emptyState}>
                   <div style={styles.emptyIcon}>🚗</div>
                   <div style={styles.emptyText}>
-                    {activeTab === "conductor"
-                      ? "No has publicado ningún viaje aún."
-                      : "No te has aplicado a ningún viaje aún."}
+                    No has publicado ningún viaje aún.
                   </div>
-                  {activeTab === "conductor" && (
-                    <button
-                      style={styles.createButton}
-                      onClick={() => router.push("/pages/login/landing")}
-                    >
-                      Crear un viaje
-                    </button>
-                  )}
+                  <button
+                    style={styles.createButton}
+                    onClick={() => router.push("/pages/login/landing")}
+                  >
+                    Crear un viaje
+                  </button>
                 </div>
               ) : (
                 <div style={styles.tripsList}>
-                  {filteredTrips.map((trip) => (
+                  {trips.map((trip) => (
                     <div key={trip.trip_id} style={styles.tripCard}>
                       <div style={styles.tripHeader}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <span
-                            style={{
-                              ...styles.statusBadge,
-                              background:
-                                trip.status === "open"
-                                  ? "rgba(40,167,69,0.15)"
-                                  : "rgba(108,117,125,0.15)",
-                              color:
-                                trip.status === "open" ? "#28a745" : "#6c757d",
-                            }}
-                          >
-                            {trip.status === "open" ? "Abierto" : trip.status || "Desconocido"}
-                          </span>
-                          {activeTab === "pasajero" && (
-                            <span
-                              style={{
-                                ...styles.statusBadge,
-                                background: "rgba(59,130,246,0.15)",
-                                color: "#3b82f6",
-                              }}
-                            >
-                              En waitlist
-                            </span>
-                          )}
-                        </div>
+                        <span
+                          style={{
+                            ...styles.statusBadge,
+                            background:
+                              trip.status === "open"
+                                ? "rgba(40,167,69,0.15)"
+                                : "rgba(108,117,125,0.15)",
+                            color:
+                              trip.status === "open" ? "#28a745" : "#6c757d",
+                          }}
+                        >
+                          {trip.status === "open" ? "Abierto" : trip.status || "Desconocido"}
+                        </span>
                         <div style={styles.tripFare}>
                           ${Number(trip.fare || 0).toLocaleString("es-CO")}
                         </div>
@@ -862,47 +772,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 14,
     textAlign: "left",
-  },
-  tabsContainer: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  tabsWrapper: {
-    position: "relative",
-    display: "flex",
-    background: "#f1f5f9",
-    borderRadius: 8,
-    padding: 4,
-    gap: 0,
-  },
-  tabButton: {
-    flex: 1,
-    position: "relative",
-    zIndex: 1,
-    background: "transparent",
-    border: "none",
-    padding: "10px 16px",
-    fontSize: 14,
-    fontWeight: 500,
-    color: "#64748b",
-    cursor: "pointer",
-    borderRadius: 6,
-    transition: "color 0.2s ease",
-  },
-  tabButtonActive: {
-    fontWeight: 600,
-  },
-  tabIndicator: {
-    position: "absolute",
-    top: 4,
-    left: 4,
-    width: "calc(50% - 4px)",
-    height: "calc(100% - 8px)",
-    background: "#ffffff",
-    borderRadius: 6,
-    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-    transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-    zIndex: 0,
   },
 };
 

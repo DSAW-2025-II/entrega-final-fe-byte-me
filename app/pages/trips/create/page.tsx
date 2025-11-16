@@ -33,7 +33,6 @@ interface Vehicle {
 
 interface UserData {
   uid: string;
-  user_id?: string;
   first_name?: string;
   last_name?: string;
   email?: string;
@@ -73,9 +72,6 @@ export default function TripCreatePage() {
   const [availableTripsLoading, setAvailableTripsLoading] = useState(false);
   const [availableTripsError, setAvailableTripsError] = useState<string | null>(null);
   const [roleMode, setRoleMode] = useState<"driver" | "passenger">("passenger");
-  const [activeTab, setActiveTab] = useState<"todo" | "buscar">("todo");
-  const [allTrips, setAllTrips] = useState<any[]>([]);
-  const [allTripsLoading, setAllTripsLoading] = useState(false);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const isPassenger = roleMode === "passenger";
@@ -86,12 +82,7 @@ export default function TripCreatePage() {
   // Debug: mostrar estado del usuario
   useEffect(() => {
     console.log("🔍 User context in trips/create:", {
-      user: user ? {
-        uid: user.uid,
-        is_driver: user.is_driver,
-        roles: user.roles,
-        hasCar: user.hasCar,
-      } : null,
+      user: user ? { uid: user.uid } : null,
       role,
       canBeDriver,
     });
@@ -154,19 +145,19 @@ export default function TripCreatePage() {
         }
 
         try {
-          const me = await api.get("/api/me", token);
-          if (me) {
+          const { auth: clientAuth } = await import("@/lib/firebaseClient");
+          const fb = clientAuth?.currentUser;
+          if (fb) {
+            const parts = (fb.displayName || "").split(" ");
             setUserData({
-              uid: me.uid,
-              user_id: me.user_id,
-              first_name: me.first_name,
-              last_name: me.last_name,
-              email: me.email,
-              user_photo: me.user_photo,
+              uid: fb.uid,
+              first_name: parts[0] || "",
+              last_name: parts.slice(1).join(" ") || "",
+              email: fb.email || "",
+              user_photo: fb.photoURL || null,
             });
-            // Refrescar el contexto de usuario para asegurar datos actualizados
-            await refreshUser();
           }
+          await refreshUser();
         } catch (userError) {
           console.error("Error fetching user data:", userError);
           setError("No se pudo cargar la información del usuario");
@@ -192,36 +183,6 @@ export default function TripCreatePage() {
     };
 
     loadData();
-  }, [router]);
-
-  const fetchAllTrips = useCallback(async () => {
-    try {
-      setAllTripsLoading(true);
-      const token = await ensureValidToken();
-      if (!token) {
-        router.replace("/pages/login");
-        return;
-      }
-
-      const response = await api.get("/api/trips", token);
-      if (response && Array.isArray(response.trips)) {
-        const now = new Date().getTime();
-        // Filtrar solo viajes futuros
-        const futureTrips = response.trips.filter((trip: any) => {
-          if (!trip.time) return false;
-          const tripTime = new Date(trip.time).getTime();
-          return tripTime > now;
-        });
-        setAllTrips(futureTrips);
-      } else {
-        setAllTrips([]);
-      }
-    } catch (error: any) {
-      console.error("Error fetching all trips:", error);
-      setAllTrips([]);
-    } finally {
-      setAllTripsLoading(false);
-    }
   }, [router]);
 
   const fetchAvailableTrips = useCallback(async () => {
@@ -270,12 +231,8 @@ export default function TripCreatePage() {
   }, [tripInitialized, tripFromCoord, tripToCoord, tripDate, tripTime, router, roleMode]);
 
   useEffect(() => {
-    if (activeTab === "buscar") {
-      fetchAvailableTrips();
-    } else if (activeTab === "todo") {
-      fetchAllTrips();
-    }
-  }, [activeTab, fetchAvailableTrips, fetchAllTrips]);
+    fetchAvailableTrips();
+  }, [fetchAvailableTrips]);
 
   const userName = useMemo(() => {
     if (!userData) return "Usuario";
@@ -318,46 +275,6 @@ export default function TripCreatePage() {
       return tripTime;
     }
   }, [tripTime]);
-
-  const handleApplyToTrip = useCallback(async (tripId: string) => {
-    if (!userData?.user_id) {
-      alert("No se pudo obtener tu información de usuario. Por favor, inicia sesión nuevamente.");
-      return;
-    }
-
-    try {
-      const token = await ensureValidToken();
-      if (!token) {
-        alert("No estás autenticado. Inicia sesión nuevamente.");
-        return;
-      }
-
-      const response = await api.patch("/api/trips", {
-        trip_id: tripId,
-        user_id: userData.user_id,
-      }, token);
-
-      if (response) {
-        setFeedback("¡Te has aplicado al viaje exitosamente!");
-        // Refrescar los viajes disponibles
-        if (activeTab === "buscar") {
-          await fetchAvailableTrips();
-        } else {
-          await fetchAllTrips();
-        }
-      }
-    } catch (error: any) {
-      console.error("Error applying to trip:", error);
-      const errorMessage = error?.message || error?.error || "No se pudo aplicar al viaje. Intenta nuevamente.";
-      if (errorMessage.includes("already in waitlist")) {
-        alert("Ya te has aplicado a este viaje.");
-      } else if (errorMessage.includes("cannot apply to your own trip") || errorMessage.includes("own trip")) {
-        alert("No puedes aplicar a tu propio viaje.");
-      } else {
-        alert(errorMessage);
-      }
-    }
-  }, [userData, activeTab, fetchAvailableTrips, fetchAllTrips]);
 
   const formatTripDateTime = (iso: string) => {
     try {
@@ -608,7 +525,7 @@ export default function TripCreatePage() {
                   try {
                     const token = await ensureValidToken();
                     if (token) {
-                      const freshUserData = await api.get("/api/me", token);
+                      const freshUserData = null;
                       const vehiclesResp = await api.get("/api/vehicles", token);
                       const freshVehicles = Array.isArray(vehiclesResp?.vehicles) ? vehiclesResp.vehicles : [];
                       if (freshUserData) {
@@ -833,102 +750,10 @@ export default function TripCreatePage() {
             </button>
           </div>
 
-          <div style={styles.tabsContainer}>
-            <div style={styles.tabsWrapper}>
-              <button
-                type="button"
-                style={{
-                  ...styles.tabButton,
-                  ...(activeTab === "todo" ? styles.tabButtonActive : {}),
-                }}
-                onClick={() => setActiveTab("todo")}
-              >
-                Todo
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...styles.tabButton,
-                  ...(activeTab === "buscar" ? styles.tabButtonActive : {}),
-                }}
-                onClick={() => setActiveTab("buscar")}
-              >
-                Buscar
-              </button>
-              <div
-                style={{
-                  ...styles.tabIndicator,
-                  transform: activeTab === "todo" ? "translateX(0)" : "translateX(100%)",
-                }}
-              />
-            </div>
-          </div>
-
           <div style={styles.resultsContainer}>
             {error && <div style={styles.errorBox}>{error}</div>}
             {feedback && <div style={styles.feedback}>{feedback}</div>}
-            {activeTab === "todo" ? (
-              allTripsLoading ? (
-                <div style={styles.emptyMessage}>Cargando todos los viajes…</div>
-              ) : allTrips.length > 0 ? (
-                <div style={styles.availableList}>
-                  {allTrips.map((trip: any) => (
-                  <div key={trip.trip_id} style={styles.availableItem}>
-                    <div style={styles.availableHeader}>
-                      <div style={styles.availableDriver}>
-                        <div style={styles.availableDriverPhoto}>
-                          {trip.driver?.photo ? (
-                            <img src={trip.driver.photo} alt={trip.driver.name || "Driver"} style={styles.availableDriverPhotoImg} />
-                          ) : (
-                            <span role="img" aria-label="Driver">👤</span>
-                          )}
-                        </div>
-                        <div style={styles.availableDriverInfo}>
-                          <div style={styles.availableDriverName}>{trip.driver?.name || "Conductor"}</div>
-                          {trip.vehicle?.model && (
-                            <div style={styles.availableDriverVehicle}>{trip.vehicle.model} · {trip.vehicle?.license_plate || "Sin placa"}</div>
-                          )}
-                        </div>
-                      </div>
-                      <div style={styles.availableFare}>${Number(trip.fare || 0).toLocaleString("es-CO")}</div>
-                    </div>
-                    <div style={styles.availableBody}>
-                      <div>
-                        <div style={styles.availableLabel}>Salida</div>
-                        <div style={styles.availableValue}>{trip.start?.address || "—"}</div>
-                      </div>
-                      <div>
-                        <div style={styles.availableLabel}>Destino</div>
-                        <div style={styles.availableValue}>{trip.destination?.address || "—"}</div>
-                      </div>
-                      <div>
-                        <div style={styles.availableLabel}>Horario</div>
-                        <div style={styles.availableValue}>{formatTripDateTime(trip.time)}</div>
-                      </div>
-                    </div>
-                    <div style={styles.availableMeta}>
-                      <div>Asientos libres: {trip.seats}</div>
-                    </div>
-                    <button
-                      style={{
-                        ...styles.availableAction,
-                        ...(isPassenger && trip.driver_uid !== userData?.uid ? {} : styles.availableActionDisabled),
-                      }}
-                      onClick={() => handleApplyToTrip(trip.trip_id)}
-                      disabled={!isPassenger || trip.driver_uid === userData?.uid}
-                      title={trip.driver_uid === userData?.uid ? "No puedes aplicar a tu propio viaje" : undefined}
-                    >
-                      Aplicar al viaje
-                    </button>
-                  </div>
-                ))}
-              </div>
-              ) : (
-                <div style={styles.emptyMessage}>
-                  No tienes viajes publicados aún.
-                </div>
-              )
-            ) : availableTripsLoading ? (
+            {availableTripsLoading ? (
               <div style={styles.emptyMessage}>Buscando viajes compatibles…</div>
             ) : availableTripsError ? (
               <div style={styles.errorBox}>{availableTripsError}</div>
@@ -974,11 +799,10 @@ export default function TripCreatePage() {
                     <button
                       style={{
                         ...styles.availableAction,
-                        ...(isPassenger && trip.driver_uid !== userData?.uid ? {} : styles.availableActionDisabled),
+                        ...(isPassenger ? {} : styles.availableActionDisabled),
                       }}
-                      onClick={() => handleApplyToTrip(trip.trip_id)}
-                      disabled={!isPassenger || trip.driver_uid === userData?.uid}
-                      title={trip.driver_uid === userData?.uid ? "No puedes aplicar a tu propio viaje" : undefined}
+                      onClick={() => alert("Funcionalidad para solicitar viaje próximamente")}
+                      disabled={!isPassenger}
                     >
                       Aplicar al viaje
                     </button>
@@ -1148,30 +972,21 @@ const styles: Record<string, React.CSSProperties> = {
     width: "min(1200px, 100%)",
     background: "#ffffff",
     borderRadius: 24,
-    padding: "32px",
+    padding: 32,
     boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-    display: "flex",
-    flexDirection: "column",
+    display: "grid",
     gap: 24,
-    overflow: "visible",
   },
   header: {
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 16,
-    margin: "-32px -32px 0 -32px",
-    padding: "4px 32px 0 32px",
-    lineHeight: 1,
-    minHeight: 0,
-    height: "auto",
   },
   headerLeft: {
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 16,
-    margin: 0,
-    padding: 0,
   },
   backButtonRoute: {
     background: "transparent",
@@ -1199,9 +1014,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: "#0f2230",
     letterSpacing: 0.5,
-    lineHeight: 1,
-    margin: 0,
-    padding: 0,
   },
   tripTag: {
     background: "rgba(15, 34, 48, 0.08)",
@@ -1213,10 +1025,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   controlsRow: {
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 24,
-    margin: 0,
-    padding: 0,
   },
   roleSwitch: {
     position: "relative",
@@ -1291,51 +1101,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 600,
     color: "#0f2230",
-    lineHeight: 1,
-    margin: 0,
-    padding: 0,
-  },
-  tabsContainer: {
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  tabsWrapper: {
-    position: "relative",
-    display: "flex",
-    background: "#f1f5f9",
-    borderRadius: 8,
-    padding: 4,
-    gap: 0,
-  },
-  tabButton: {
-    flex: 1,
-    position: "relative",
-    zIndex: 1,
-    background: "transparent",
-    border: "none",
-    padding: "10px 16px",
-    fontSize: 14,
-    fontWeight: 500,
-    color: "#64748b",
-    cursor: "pointer",
-    borderRadius: 6,
-    transition: "color 0.2s ease",
-  },
-  tabButtonActive: {
-    color: "#0f2230",
-    fontWeight: 600,
-  },
-  tabIndicator: {
-    position: "absolute",
-    top: 4,
-    left: 4,
-    width: "calc(50% - 4px)",
-    height: "calc(100% - 8px)",
-    background: "#ffffff",
-    borderRadius: 6,
-    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-    transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-    zIndex: 0,
   },
   tripCard: {
     display: "grid",

@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { api } from "@/lib/api";
+import { auth as clientAuth } from "@/lib/firebaseClient";
+import { sendPasswordResetEmail } from "firebase/auth";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -24,7 +25,8 @@ export default function RecoverPassword() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  const sendResetCode = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setErr("");
     setOk("");
     
@@ -38,7 +40,7 @@ export default function RecoverPassword() {
     
     // Validar que sea correo institucional
     if (!trimmedEmail.endsWith("@unisabana.edu.co")) {
-      setErr("Solo se permiten correos institucionales de @unisabana.edu.co");
+      setErr("Solo se permiten correos @unisabana.edu.co");
       return;
     }
     
@@ -52,17 +54,29 @@ export default function RecoverPassword() {
     setLoading(true);
 
     try {
-      // Enviar código OTP usando nuestro endpoint del backend
-      // El backend genera el código y lo muestra en la consola para desarrollo
-      await api.post("/api/auth/send-otp", { email: trimmedEmail });
-
-      setOk("Código de recuperación enviado. Revisa tu correo electrónico.");
-      await delay(1500);
-      
-      // Redirigir a la página de verificación de código
-      router.push(`/verify-code?email=${encodeURIComponent(trimmedEmail)}`);
+      // Solo permitir correos institucionales
+      if (!trimmedEmail.toLowerCase().endsWith("@unisabana.edu.co")) {
+        setErr("Solo se permite recuperar contraseña para correos @unisabana.edu.co.");
+        return;
+      }
+      if (!clientAuth) {
+        throw new Error("Config de Firebase ausente. Revisa NEXT_PUBLIC_*");
+      }
+      // Enviar con Firebase para que abra la URL personalizada configurada en la consola
+      await sendPasswordResetEmail(clientAuth, trimmedEmail);
+      setOk("Si el correo está registrado, te hemos enviado un enlace para restablecer tu contraseña.");
     } catch (e: any) {
-      setErr(e.message || "Error al generar el código de recuperación");
+      console.error("Error al enviar reset:", e);
+      const code = e?.code || "";
+      if (code === "auth/user-not-found") {
+        setOk("Si el correo está registrado, te hemos enviado un enlace para restablecer tu contraseña.");
+        return;
+      }
+      if (code === "auth/invalid-email") {
+        setErr("Formato de correo inválido");
+        return;
+      }
+      setErr("No se pudo enviar el correo. Intenta de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -88,18 +102,18 @@ export default function RecoverPassword() {
 
             {/* Título */}
             <h1 style={{ ...S.title, fontSize: isMobile ? 28 : 36 }}>
-              Recover password
+              Recuperar contraseña
             </h1>
 
             {/* Subtítulo */}
-            <p style={S.subtitle}>Welcome back, write your email</p>
+            <p style={S.subtitle}>Ingresa tu correo institucional para recuperar tu cuenta</p>
 
             {/* Campo E-mail */}
-            <label style={S.label}>E-mail</label>
+            <label style={S.label}>Correo electrónico</label>
             <input
               style={{ ...S.input, height: isMobile ? 44 : 46 }}
               type="email"
-              placeholder="Enter your E-mail address"
+              placeholder="Ingresa tu correo electrónico"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
@@ -108,19 +122,22 @@ export default function RecoverPassword() {
             {err && <div style={S.error}>{err}</div>}
             {ok && <div style={S.success}>{ok}</div>}
 
-            {/* Botón Send a code */}
-            <button
+            {/* Formulario: submit evita recarga y hace XHR a Firebase */}
+            <form onSubmit={handleSubmit}>
+              {/* Botón enviar link */}
+              <button
               style={{
                 ...S.sendButton,
                 height: isMobile ? 44 : 46,
                 opacity: loading ? 0.7 : 1,
                 cursor: loading ? "not-allowed" : "pointer",
               }}
-              onClick={sendResetCode}
+              type="submit"
               disabled={loading}
             >
-              {loading ? "Enviando..." : "Send a code"}
-            </button>
+              {loading ? "Enviando..." : "Enviar enlace de recuperación"}
+              </button>
+            </form>
 
             {/* Link para volver al login */}
             <button
@@ -128,7 +145,7 @@ export default function RecoverPassword() {
               onClick={() => router.push("/pages/login")}
               style={S.loginLink}
             >
-              I already have an account
+              Ya tengo una cuenta
             </button>
           </div>
         </div>

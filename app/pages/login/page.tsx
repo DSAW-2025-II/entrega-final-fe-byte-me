@@ -8,6 +8,8 @@ import { saveToken, ensureValidToken } from "@/lib/auth";
 import ButtonBlack from "@/components/ButtonBlack";
 import ButtonOutline from "@/components/ButtonOutline";
 import ButtonGoogle from "@/components/ButtonGoogle";
+import { signInWithEmailAndPassword, fetchSignInMethodsForEmail } from "firebase/auth";
+import { auth as clientAuth } from "@/lib/firebaseClient";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -54,159 +56,13 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const result = await api.post("/api/auth/login", {
-        email: trimmedEmail,
-        password: pass,
-      });
-
-      // Guardar el token temporal
-      if (result.idToken) {
-        saveToken(result.idToken, result.refreshToken);
-        
-        // IMPORTANTE: También autenticar al usuario en Firebase Auth del cliente
-        // Esto es necesario para que funcione el cambio de contraseña y otras funciones
-        try {
-          const { signInWithEmailAndPassword } = await import("firebase/auth");
-          const { auth, initializeFirebase } = await import("@/lib/firebase");
-          
-          initializeFirebase();
-          await delay(200);
-          
-          if (auth) {
-            // Autenticar al usuario en Firebase Auth del cliente
-            await signInWithEmailAndPassword(auth, trimmedEmail, pass);
-            console.log("✅ Usuario autenticado en Firebase Auth del cliente");
-          }
-        } catch (firebaseAuthError: any) {
-          // Si falla la autenticación en Firebase Auth, no es crítico
-          // porque ya tenemos el token del backend
-          console.warn("⚠️ No se pudo autenticar en Firebase Auth del cliente:", firebaseAuthError);
-          // Continuar de todas formas porque el token del backend es válido
-        }
-        
-        // Verificar que el token sea válido antes de redirigir
-        const validToken = await ensureValidToken();
-        if (!validToken) {
-          throw new Error("No se pudo validar la sesión. Intenta nuevamente.");
-        }
-      } else {
-        throw new Error("No se recibió token de autenticación");
-      }
-
-      setOk("Login exitoso");
-      await delay(800);
-      setOk("");
-      
-      // Redirigir al landing page solo después de verificar el token
+      // Login 100% con Firebase en el FRONT y error genérico
+      if (!clientAuth) throw new Error("Config de Firebase ausente. Revisa NEXT_PUBLIC_*");
+      await signInWithEmailAndPassword(clientAuth, trimmedEmail, pass);
       router.push("/pages/login/landing");
     } catch (e: any) {
-      const errorMessage = e.message || "Error al iniciar sesión";
-      
-      // Manejar diferentes tipos de errores
-      if (errorMessage.includes("Usuario no encontrado") || errorMessage.includes("EMAIL_NOT_FOUND")) {
-        // Si el usuario no está registrado, redirigir automáticamente a registro
-        setErr("");
-        router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
-        return;
-      } else if (
-        errorMessage.includes("Contraseña incorrecta") || 
-        errorMessage.includes("INVALID_PASSWORD") ||
-        errorMessage.includes("INVALID_LOGIN_CREDENTIALS")
-      ) {
-        // Verificar si el email existe para determinar si es contraseña incorrecta o usuario no encontrado
-        try {
-          const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-          if (apiKey) {
-            const checkUrl = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
-            const checkResponse = await fetch(checkUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                identifier: trimmedEmail, 
-                continueUri: "http://localhost" 
-              }),
-            });
-            
-            const checkData = await checkResponse.json();
-            
-            // Si el email está registrado, entonces la contraseña es incorrecta
-            if (checkData.registered === true || (checkData.signinMethods && checkData.signinMethods.length > 0)) {
-              setErr("Contraseña incorrecta");
-              return;
-            }
-          }
-        } catch (checkError) {
-          // Si no se puede verificar, asumir que es contraseña incorrecta
-          console.warn("No se pudo verificar el email, asumiendo contraseña incorrecta");
-        }
-        setErr("Contraseña incorrecta");
-      } else if (errorMessage.includes("INVALID_LOGIN_CREDENTIALS")) {
-        // Firebase puede devolver INVALID_LOGIN_CREDENTIALS para ambos casos
-        // Necesitamos verificar si el email existe
-        try {
-          const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-          if (apiKey) {
-            const checkUrl = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
-            const checkResponse = await fetch(checkUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                identifier: trimmedEmail, 
-                continueUri: "http://localhost" 
-              }),
-            });
-            
-            const checkData = await checkResponse.json();
-            
-            // Log para debug
-            console.log("Verificación de email:", checkData);
-            
-            // Verificar si el email está registrado
-            // Firebase puede devolver diferentes formatos de respuesta
-            const hasEmailNotFound = checkData.error?.message === "EMAIL_NOT_FOUND" || 
-                                     checkData.error?.message?.includes("EMAIL_NOT_FOUND") ||
-                                     checkData.error?.code === 400;
-            
-            // Verificar si hay signInMethods (si existe, el email está registrado)
-            const hasSignInMethods = checkData.signinMethods && Array.isArray(checkData.signinMethods) && checkData.signinMethods.length > 0;
-            
-            // Si hay error de EMAIL_NOT_FOUND o no hay métodos de autenticación, el usuario no existe
-            if (hasEmailNotFound || (!checkData.registered && !hasSignInMethods)) {
-              // El usuario no existe, redirigir a registro
-              console.log("Email no registrado, redirigiendo a registro");
-              setErr("");
-              router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
-              return;
-            } else if (checkData.registered === true || hasSignInMethods) {
-              // El usuario existe explícitamente, entonces la contraseña es incorrecta
-              console.log("Email registrado, contraseña incorrecta");
-              setErr("Contraseña incorrecta");
-            } else {
-              // Si no podemos determinar, redirigir a registro por seguridad
-              // (mejor UX: permitir que el usuario cree su cuenta)
-              console.log("Estado del email no claro, redirigiendo a registro");
-              setErr("");
-              router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
-              return;
-            }
-          } else {
-            // Si no podemos verificar, intentar redirigir a registro por defecto
-            // para que el usuario pueda crear su cuenta
-            setErr("");
-            router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
-            return;
-          }
-        } catch (checkError) {
-          // Si falla la verificación, redirigir a registro por defecto
-          // para que el usuario pueda intentar crear su cuenta
-          console.error("Error verificando email:", checkError);
-          setErr("");
-          router.push(`/pages/create-user?email=${encodeURIComponent(trimmedEmail)}&from=login&blocked=true`);
-          return;
-        }
-      } else {
-        setErr(errorMessage);
-      }
+      console.error("Firebase login error:", e);
+      setErr("Correo o contraseña incorrectos.");
     } finally {
       setLoading(false);
     }
@@ -396,6 +252,25 @@ export default function Login() {
               onChange={(e) => setPass(e.target.value)}
               autoComplete="current-password"
             />
+
+        {/* Olvidé mi contraseña */}
+        <button
+          type="button"
+          onClick={() => router.push("/recover-password")}
+          style={{
+            background: "transparent",
+            border: "none",
+            padding: 0,
+            marginTop: 6,
+            color: "#0126B9",
+            fontSize: 14,
+            textAlign: "left",
+            cursor: "pointer",
+            width: "fit-content",
+          }}
+        >
+          ¿Olvidaste tu contraseña?
+        </button>
 
             {err && <div style={S.error}>{err}</div>}
             {ok && <div style={S.success}>{ok}</div>}

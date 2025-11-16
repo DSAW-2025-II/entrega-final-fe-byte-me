@@ -38,34 +38,16 @@ export default function LandingPage() {
           return;
         }
 
-        // Obtener datos del usuario desde Firestore usando /api/me
+        // Obtener usuario desde Firebase Auth (no usar /api/me)
         try {
-          const result = await api.get("/api/me", validToken);
-          if (result && (result.first_name || result.email)) {
-            console.log("Usuario obtenido de Firestore:", result);
-            console.log("Foto del usuario:", result.user_photo);
-            setUserData(result);
-            setLoading(false);
-            return;
-          }
-        } catch (apiError) {
-          console.log("No se encontró usuario en Firestore, intentando Firebase Auth...", apiError);
-        }
-
-        // Si no hay datos en Firestore, obtener de Firebase Auth
-        try {
-          const { auth, initializeFirebase } = await import("@/lib/firebase");
+          const { auth: clientAuth } = await import("@/lib/firebaseClient");
           const { onAuthStateChanged } = await import("firebase/auth");
-          
-          // Asegurar que Firebase esté inicializado
-          initializeFirebase();
-          
-          if (!auth) {
+          if (!clientAuth) {
             setLoading(false);
             return;
           }
           
-          onAuthStateChanged(auth, (currentUser) => {
+          onAuthStateChanged(clientAuth, (currentUser) => {
             if (currentUser) {
               const nameParts = (currentUser.displayName || "").split(" ");
               setUserData({
