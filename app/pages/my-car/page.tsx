@@ -185,13 +185,21 @@ export default function MyCarPage() {
       }
 
       // Obtener datos del usuario actual para enviarlos junto con la actualización
-      const currentUserData: {
+      let currentUserData: {
         first_name?: string;
         last_name?: string;
         user_id?: string;
         phone?: string;
         email?: string;
       } | null = null;
+
+      try {
+        const me = await api.get("/api/me", validToken);
+        currentUserData = me || null;
+      } catch (err) {
+        console.error("Error fetching current user data for driver registration:", err);
+        currentUserData = null;
+      }
       
       const response = await api.post(
         "/api/auth/register",
