@@ -9,6 +9,7 @@ interface User {
   email?: string | null;
   displayName?: string | null;
   user_photo?: string | null;
+  phone?: string | null; // opcional, para lugares donde se usa user?.phone
 }
 
 type Role = "driver" | "passenger" | null;
@@ -44,6 +45,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           email: fbUser.email,
           displayName: fbUser.displayName,
           user_photo: fbUser.photoURL,
+          // phone vendrá del backend más adelante; por ahora puede quedar undefined
         };
         setUserState(u);
         setRoleState("passenger");

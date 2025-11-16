@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/lib/firebaseClient";
 import { verifyPasswordResetCode, confirmPasswordReset } from "firebase/auth";
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const oobCode = searchParams.get("oobCode");
@@ -201,6 +201,20 @@ export default function ResetPasswordPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={S.shell}>
+          <div style={S.card}>Verificando enlace...</div>
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
 
