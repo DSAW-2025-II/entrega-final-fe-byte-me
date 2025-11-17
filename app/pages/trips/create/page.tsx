@@ -1670,6 +1670,11 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#0f2230",
   },
   availableMeta: {
+    display: "flex",
+    gap: 16,
+    fontSize: 12,
+    color: "#334155",
+  },
   applyRow: {
     display: "flex",
     alignItems: "center",
@@ -1695,11 +1700,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     padding: "6px 8px",
     fontSize: 14,
-  },
-    display: "flex",
-    gap: 16,
-    fontSize: 12,
-    color: "#334155",
   },
   availableAction: {
     border: "none",
