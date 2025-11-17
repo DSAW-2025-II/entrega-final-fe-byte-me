@@ -8,6 +8,7 @@ import { ensureValidToken } from "@/lib/auth";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 import { useUser } from "@/app/contexts/UserContext";
 import NotificationButton from "@/app/components/NotificationButton";
+import { useAuthGuard } from "@/app/hooks/useAuthGuard";
 
 interface Coordinates {
   lat: number;
@@ -49,6 +50,7 @@ const TRIP_DRAFT_STORAGE_KEY = "movetogether_tripDraft";
 export default function TripCreatePage() {
   const router = useRouter();
   const { user, role, refreshUser } = useUser();
+  const { loading: authLoading } = useAuthGuard({ requireAuth: true });
   const [draft, setDraft] = useState<TripDraft | null>(null);
   const [draftLoading, setDraftLoading] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -86,6 +88,15 @@ export default function TripCreatePage() {
   
   // Determinar si el usuario puede ser conductor basado en el contexto
   const canBeDriver = true;
+
+  // Mostrar loader mientras se verifica la autenticación
+  if (authLoading) {
+    return (
+      <div style={{ width: "100vw", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f5f6f8" }}>
+        <div style={{ fontSize: 16, color: "#666" }}>Cargando...</div>
+      </div>
+    );
+  }
   
   // Debug: mostrar estado del usuario
   useEffect(() => {
@@ -332,10 +343,8 @@ export default function TripCreatePage() {
     } catch (error: any) {
       console.error("Error applying to trip:", error);
       const errorMessage = error?.message || error?.error || "No se pudo aplicar al viaje. Intenta nuevamente.";
-      if (errorMessage.includes("already in waitlist")) {
-        alert("Ya te has aplicado a este viaje.");
-      } else if (errorMessage.includes("cannot apply to your own trip") || errorMessage.includes("own trip")) {
-        alert("No puedes aplicar a tu propio viaje.");
+      if (errorMessage.includes("already in waitlist") || errorMessage.includes("already applied") || errorMessage.includes("already a passenger")) {
+        alert("Ya te has aplicado a este viaje o ya eres pasajero.");
       } else {
         alert(errorMessage);
       }
@@ -982,20 +991,18 @@ export default function TripCreatePage() {
                         <button
                           style={{
                             ...styles.availableAction,
-                            ...(isPassenger && trip.driver_uid !== userData?.uid && trip.status !== "closed" && availableSeats > 0
+                            ...(isPassenger && trip.status !== "closed" && availableSeats > 0
                               ? {}
                               : styles.availableActionDisabled),
                           }}
                           onClick={() => handleApplyToTrip(trip)}
-                          disabled={!isPassenger || trip.driver_uid === userData?.uid || trip.status === "closed" || availableSeats <= 0}
+                          disabled={!isPassenger || trip.status === "closed" || availableSeats <= 0}
                           title={
-                            trip.driver_uid === userData?.uid
-                              ? "No puedes aplicar a tu propio viaje"
-                              : trip.status === "closed"
+                            trip.status === "closed"
                               ? "Este viaje ya está lleno"
                               : availableSeats <= 0
                               ? "No hay asientos disponibles"
-                              : undefined
+                              : "Aplicar al viaje"
                           }
                         >
                           Aplicar al viaje

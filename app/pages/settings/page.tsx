@@ -9,6 +9,7 @@ import { signOut } from "firebase/auth";
 import { initializeFirebase } from "@/lib/firebase";
 import { useTheme } from "@/app/contexts/ThemeContext";
 import NotificationButton from "@/app/components/NotificationButton";
+import UserPageLayout from "@/app/components/UserPageLayout";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -492,12 +493,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div style={pageStyle}>
-      <div style={containerStyle}>
-        {/* TOP BAR */}
+    <>
+      <UserPageLayout active="settings" onLogout={handleLogout}>
         <header style={{
           ...styles.topbar,
           background: savedTheme === "dark" ? "#2a2a2a" : "transparent",
+          marginBottom: 24,
         }}>
           <button
             style={{
@@ -523,45 +524,7 @@ export default function SettingsPage() {
           </div>
         </header>
 
-        {/* BODY */}
-        <div
-          style={{
-            ...styles.body,
-            gridTemplateColumns: isMobile ? "1fr" : "220px 1fr",
-          }}
-        >
-          {/* SIDEBAR */}
-          <aside style={{
-            ...styles.sidebar,
-            background: savedTheme === "dark" ? "#2a2a2a" : "#e5e7eb",
-          }}>
-            {[
-              { label: "My trips", action: () => dev("My trips") },
-              { label: "My Car", action: () => router.push("/pages/my-car") },
-              { label: "My Profile", action: () => router.push("/pages/user") },
-              { label: "Settings", action: () => {} },
-              { label: "Help", action: () => router.push("/pages/help") },
-            ].map((item) => (
-              <button
-                key={item.label}
-                style={{
-                  ...styles.sideItem,
-                  backgroundColor: item.label === "Settings" ? "#d1d5db" : "transparent",
-                }}
-                onClick={item.action}
-              >
-                <span>{item.label}</span>
-                <span style={{ fontWeight: 700 }}>+</span>
-              </button>
-            ))}
-            <button style={styles.sideItem} onClick={handleLogout}>
-              <span>Close session</span>
-              <span style={{ fontWeight: 700 }}>+</span>
-            </button>
-          </aside>
-
-          {/* MAIN */}
-          <main style={styles.main}>
+        <div>
             <h2 style={{
               ...styles.sectionTitle,
               color: savedTheme === "dark" ? "#ededed" : "#0f2230",
@@ -744,9 +707,8 @@ export default function SettingsPage() {
                 {savedLanguage === "es" ? "Guardar cambios" : "Save changes"}
               </button>
             </section>
-          </main>
         </div>
-      </div>
+      </UserPageLayout>
 
       {/* MODAL PARA CAMBIAR CONTRASEÑA */}
       {showChangePasswordModal && (
@@ -843,7 +805,7 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

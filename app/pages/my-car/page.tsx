@@ -12,6 +12,7 @@ import { initializeFirebase } from "@/lib/firebase";
 import { useTheme } from "@/app/contexts/ThemeContext";
 import { useUser } from "@/app/contexts/UserContext";
 import NotificationButton from "@/app/components/NotificationButton";
+import UserPageLayout from "@/app/components/UserPageLayout";
 
 // Imagen por defecto del carro (usar la segunda imagen proporcionada)
 const DEFAULT_CAR_IMAGE = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800&h=600&fit=crop";
@@ -455,12 +456,12 @@ export default function MyCarPage() {
   };
 
   return (
-    <div style={pageStyle}>
-      <div style={containerStyle}>
-        {/* TOP BAR */}
+    <>
+      <UserPageLayout active="my-car" onLogout={handleLogout}>
         <header style={{
           ...styles.topbar,
           background: theme === "dark" ? "#2a2a2a" : "transparent",
+          marginBottom: 24,
         }}>
           <button
             style={{
@@ -487,46 +488,7 @@ export default function MyCarPage() {
           </div>
         </header>
 
-        {/* BODY */}
-        <div
-          style={{
-            ...styles.body,
-            gridTemplateColumns: isMobile ? "1fr" : "220px 1fr",
-          }}
-        >
-          {/* SIDEBAR */}
-          <aside style={{
-            ...styles.sidebar,
-            background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
-          }}>
-            {[
-              { label: "My trips", action: () => dev("My trips") },
-              { label: "My Car", action: () => {} },
-              { label: "My Profile", action: () => router.push("/pages/user") },
-              { label: "Settings", action: () => router.push("/pages/settings") },
-              { label: "Help", action: () => router.push("/pages/help") },
-            ].map((item) => (
-              <button
-                key={item.label}
-                style={{
-                  ...styles.sideItem,
-                  backgroundColor: item.label === "My Car" ? "#d1d5db" : "transparent",
-                }}
-                onClick={item.action}
-              >
-                <span>{item.label}</span>
-                <span style={{ fontWeight: 700 }}>+</span>
-              </button>
-            ))}
-            {/* Cerrar sesión */}
-            <button style={styles.sideItem} onClick={handleLogout}>
-              <span>Close session</span>
-              <span style={{ fontWeight: 700 }}>+</span>
-            </button>
-          </aside>
-
-          {/* MAIN */}
-          <main style={styles.main}>
+        <div>
             <div style={styles.headerSection}>
               <h2 style={{
                 ...styles.sectionTitle,
@@ -701,9 +663,8 @@ export default function MyCarPage() {
                 )}
               </section>
             )}
-          </main>
         </div>
-      </div>
+      </UserPageLayout>
 
       {/* MODAL PARA AGREGAR CARRO */}
       {showAddForm && (
@@ -968,7 +929,7 @@ export default function MyCarPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

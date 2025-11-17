@@ -8,6 +8,7 @@ import { auth as clientAuth } from "@/lib/firebaseClient";
 import { signOut } from "firebase/auth";
 import { useTheme } from "@/app/contexts/ThemeContext";
 import NotificationButton from "@/app/components/NotificationButton";
+import UserPageLayout from "@/app/components/UserPageLayout";
 
 export default function HelpPage() {
   const router = useRouter();
@@ -227,76 +228,37 @@ export default function HelpPage() {
   };
 
   return (
-    <div style={pageStyle}>
-      <div style={containerStyle}>
-        {/* TOP BAR */}
-        <header style={{
-          ...styles.topbar,
-          background: theme === "dark" ? "#2a2a2a" : "transparent",
-        }}>
-          <button
-            style={{
-              ...styles.brandBtn,
-              color: theme === "dark" ? "#ededed" : "#0f2230",
-            }}
-            onClick={() => router.push("/pages/login/landing")}
-          >
-            MoveTogether
-          </button>
+    <UserPageLayout active="help" onLogout={handleLogout}>
+      <header style={{
+        ...styles.topbar,
+        background: theme === "dark" ? "#2a2a2a" : "transparent",
+        marginBottom: 24,
+      }}>
+        <button
+          style={{
+            ...styles.brandBtn,
+            color: theme === "dark" ? "#ededed" : "#0f2230",
+          }}
+          onClick={() => router.push("/pages/login/landing")}
+        >
+          MoveTogether
+        </button>
 
-          <div style={styles.fillBar}>
-            <div style={styles.toolbar}>
-              <button style={styles.iconBtn} onClick={() => dev("Mensajes")}>
-                💬
-              </button>
-              <NotificationButton />
-              <div style={styles.userPill}>
-                <div style={styles.userCircle}>👤</div>
-                <span>{userName}</span>
-              </div>
+        <div style={styles.fillBar}>
+          <div style={styles.toolbar}>
+            <button style={styles.iconBtn} onClick={() => dev("Mensajes")}>
+              💬
+            </button>
+            <NotificationButton />
+            <div style={styles.userPill}>
+              <div style={styles.userCircle}>👤</div>
+              <span>{userName}</span>
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* BODY */}
-        <div
-          style={{
-            ...styles.body,
-            gridTemplateColumns: isMobile ? "1fr" : "220px 1fr",
-          }}
-        >
-          {/* SIDEBAR */}
-          <aside style={{
-            ...styles.sidebar,
-            background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
-          }}>
-            {[
-              { label: "My trips", action: () => dev("My trips") },
-              { label: "My Car", action: () => router.push("/pages/my-car") },
-              { label: "My Profile", action: () => router.push("/pages/user") },
-              { label: "Settings", action: () => router.push("/pages/settings") },
-              { label: "Help", action: () => {} },
-            ].map((item) => (
-              <button
-                key={item.label}
-                style={{
-                  ...styles.sideItem,
-                  backgroundColor: item.label === "Help" ? "#d1d5db" : "transparent",
-                }}
-                onClick={item.action}
-              >
-                <span>{item.label}</span>
-                <span style={{ fontWeight: 700 }}>+</span>
-              </button>
-            ))}
-            <button style={styles.sideItem} onClick={handleLogout}>
-              <span>Close session</span>
-              <span style={{ fontWeight: 700 }}>+</span>
-            </button>
-          </aside>
-
-          {/* MAIN */}
-          <main style={styles.main}>
+      <div>
             <h2 style={{
               ...styles.sectionTitle,
               color: theme === "dark" ? "#ededed" : "#0f2230",
@@ -470,10 +432,8 @@ export default function HelpPage() {
                 ? "Si no encuentras lo que buscas, escríbenos. ¡Estamos para ayudarte! 💬"
                 : "If you can't find what you're looking for, write to us. We're here to help! 💬"}
             </div>
-          </main>
-        </div>
       </div>
-    </div>
+    </UserPageLayout>
   );
 }
 

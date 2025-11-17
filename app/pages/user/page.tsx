@@ -10,10 +10,13 @@ import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 import MapPicker from "@/components/MapPicker";
 import { useTheme } from "@/app/contexts/ThemeContext";
 import NotificationButton from "@/app/components/NotificationButton";
+import UserPageLayout from "@/app/components/UserPageLayout";
+import { useAuthGuard } from "@/app/hooks/useAuthGuard";
 
 export default function UserPage() {
   const router = useRouter();
   const { theme, language } = useTheme();
+  const { loading: authLoading } = useAuthGuard({ requireAuth: true });
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -188,15 +191,15 @@ export default function UserPage() {
   };
 
   return (
-    <div style={pageStyle}>
-      <div style={containerStyle}>
-        {/* TOP BAR */}
+    <>
+      <UserPageLayout active="profile" onLogout={handleLogout}>
         <header style={{
           ...styles.topbar,
           flexDirection: isMobile ? "column" : "row",
           gap: isMobile ? 12 : 12,
           padding: isMobile ? "16px" : "20px",
           background: theme === "dark" ? "#2a2a2a" : "transparent",
+          marginBottom: 24,
         }}>
           <div
             style={{
@@ -248,65 +251,7 @@ export default function UserPage() {
           </div>
         </header>
 
-        {/* BODY */}
-        <div
-          style={{
-            ...styles.body,
-            gridTemplateColumns: isMobile ? "1fr" : isTablet ? "180px 1fr" : "220px 1fr",
-            gap: isMobile ? 16 : 24,
-            padding: isMobile ? "0 16px 24px 16px" : "0 28px 32px 28px",
-          }}
-        >
-          {/* SIDEBAR */}
-          <aside style={{
-            ...styles.sidebar,
-            display: isMobile ? "flex" : "grid",
-            flexDirection: isMobile ? "row" : "column",
-            overflowX: isMobile ? "auto" : "visible",
-            gap: isMobile ? 8 : 8,
-            padding: isMobile ? "12px" : "14px",
-            background: theme === "dark" ? "#2a2a2a" : "#e5e7eb",
-          }}>
-            {[
-              { label: "My trips", action: () => router.push("/pages/trips"), path: "/pages/trips" },
-              { label: "My Car", action: () => router.push("/pages/my-car"), path: "/pages/my-car" },
-              { label: "My Profile", action: () => {}, path: "/pages/user" },
-              { label: "Settings", action: () => router.push("/pages/settings"), path: "/pages/settings" },
-              { label: "Help", action: () => router.push("/pages/help"), path: "/pages/help" },
-            ].map((item) => {
-              const isActive = typeof window !== "undefined" && window.location.pathname === item.path;
-              return (
-                <button
-                  key={item.label}
-                  style={{
-                    ...styles.sideItem,
-                    whiteSpace: isMobile ? "nowrap" : "normal",
-                    minWidth: isMobile ? "120px" : "auto",
-                    backgroundColor: isActive ? "#d1d5db" : "transparent",
-                  }}
-                  onClick={item.action}
-                >
-                  <span>{item.label}</span>
-                  <span style={{ fontWeight: 700 }}>+</span>
-                </button>
-              );
-            })}
-            {/* Cerrar sesión real */}
-            <button style={{
-              ...styles.sideItem,
-              whiteSpace: isMobile ? "nowrap" : "normal",
-              minWidth: isMobile ? "120px" : "auto",
-            }} onClick={handleLogout}>
-              <span>Close session</span>
-              <span style={{ fontWeight: 700 }}>+</span>
-            </button>
-          </aside>
-
-          {/* MAIN */}
-          <main style={{
-            ...styles.main,
-            paddingRight: isMobile ? 0 : 6,
-          }}>
+        <div>
             <h2 style={{
               ...styles.sectionTitle,
               fontSize: isMobile ? 20 : 22,
@@ -464,45 +409,44 @@ export default function UserPage() {
                 />
               </div>
             </section>
-          </main>
         </div>
-      </div>
-      
-      {/* Modal para selección desde mapa */}
-      {mapMode && (
-        <div style={styles.mapModal}>
-          <div style={styles.mapModalContent}>
-            <div style={styles.mapModalHeader}>
-              <h3 style={styles.mapModalTitle}>
-                Seleccionar {mapMode === "city" ? "Ciudad" : mapMode === "address" ? "Dirección" : "Punto de referencia"} desde el mapa
-              </h3>
-              <button
-                style={styles.mapModalClose}
-                onClick={() => setMapMode(null)}
-              >
-                ✕
-              </button>
-            </div>
-            <div style={styles.mapModalMap}>
-              <MapPicker
-                onPlaceSelect={(place) => {
-                  if (mapMode === "city") {
-                    setMe({ ...me, city: place.address });
-                  } else if (mapMode === "address") {
-                    setMe({ ...me, address: place.address });
-                  } else if (mapMode === "landmark") {
-                    setMe({ ...me, nearby_landmark: place.address });
-                  }
-                  setMapMode(null);
-                }}
-                mode="from"
-                height="500px"
-              />
+        
+        {/* Modal para selección desde mapa */}
+        {mapMode && (
+          <div style={styles.mapModal}>
+            <div style={styles.mapModalContent}>
+              <div style={styles.mapModalHeader}>
+                <h3 style={styles.mapModalTitle}>
+                  Seleccionar {mapMode === "city" ? "Ciudad" : mapMode === "address" ? "Dirección" : "Punto de referencia"} desde el mapa
+                </h3>
+                <button
+                  style={styles.mapModalClose}
+                  onClick={() => setMapMode(null)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={styles.mapModalMap}>
+                <MapPicker
+                  onPlaceSelect={(place) => {
+                    if (mapMode === "city") {
+                      setMe({ ...me, city: place.address });
+                    } else if (mapMode === "address") {
+                      setMe({ ...me, address: place.address });
+                    } else if (mapMode === "landmark") {
+                      setMe({ ...me, nearby_landmark: place.address });
+                    }
+                    setMapMode(null);
+                  }}
+                  mode="from"
+                  height="500px"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </UserPageLayout>
+    </>
   );
 }
 

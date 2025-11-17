@@ -42,7 +42,9 @@ export default function NotificationButton() {
 
   const iconBtnStyle: React.CSSProperties = {
     background: "none",
-    border: `1px solid ${theme === "dark" ? "#334155" : "#e5e7eb"}`,
+    borderWidth: showNotifications ? 2 : 1,
+    borderStyle: "solid",
+    borderColor: showNotifications ? "#3b82f6" : (theme === "dark" ? "#334155" : "#e5e7eb"),
     borderRadius: 8,
     padding: "8px 12px",
     cursor: "pointer",
@@ -57,10 +59,7 @@ export default function NotificationButton() {
   return (
     <>
       <button
-        style={{
-          ...iconBtnStyle,
-          ...(showNotifications ? { borderColor: "#3b82f6", borderWidth: 2 } : {}),
-        }}
+        style={iconBtnStyle}
         title="Notificaciones"
         onClick={handleToggleNotifications}
       >

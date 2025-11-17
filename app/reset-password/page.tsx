@@ -6,10 +6,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/lib/firebaseClient";
 import { verifyPasswordResetCode, confirmPasswordReset } from "firebase/auth";
+import { useAuthGuard } from "@/app/hooks/useAuthGuard";
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { loading: authLoading } = useAuthGuard({ requireAuth: false });
   const oobCode = searchParams.get("oobCode");
 
   const [verifying, setVerifying] = useState(true);
@@ -19,6 +21,7 @@ function ResetPasswordContent() {
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
 
   useEffect(() => {
     const verify = async () => {
@@ -45,11 +48,23 @@ function ResetPasswordContent() {
   }, [oobCode]);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.matchMedia("(max-width: 768px)").matches);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    const checkMedia = () => {
+      setIsMobile(window.innerWidth < 768);
+      setIsTablet(window.innerWidth >= 768 && window.innerWidth < 1024);
+    };
+    checkMedia();
+    window.addEventListener("resize", checkMedia);
+    return () => window.removeEventListener("resize", checkMedia);
   }, []);
+
+  // Mostrar loader mientras se verifica la autenticación
+  if (authLoading) {
+    return (
+      <div style={S.loadingContainer}>
+        <div style={S.loadingSpinner}>Cargando...</div>
+      </div>
+    );
+  }
 
   const validatePassword = (password: string, email?: string | null): string | null => {
     if (!password || password.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
@@ -117,16 +132,17 @@ function ResetPasswordContent() {
       <div
         style={{
           ...S.canvas,
-          gridTemplateColumns: isMobile ? "1fr" : "2fr 3fr",
-          maxWidth: 1280,
-          maxHeight: 832,
+          gridTemplateColumns: isMobile ? "1fr" : isTablet ? "1fr 1fr" : "2fr 3fr",
+          maxWidth: isMobile ? "100%" : 1280,
+          maxHeight: isMobile ? "100%" : 832,
           width: "100%",
-          height: "100%",
+          height: isMobile ? "100%" : "auto",
+          minHeight: isMobile ? "100vh" : "auto",
         }}
       >
         {/* IZQUIERDA - FORMULARIO */}
-        <div style={{ ...S.leftPane, padding: isMobile ? 20 : 32 }}>
-          <div style={{ ...S.formCard, width: isMobile ? "100%" : 420 }}>
+        <div style={{ ...S.leftPane, padding: isMobile ? "24px 20px" : isTablet ? 28 : 32 }}>
+          <div style={{ ...S.formCard, width: isMobile ? "100%" : isTablet ? "90%" : 420, maxWidth: isMobile ? "100%" : 420 }}>
             {/* Logo */}
             <div style={S.logo}>MoveTogether</div>
 
@@ -221,10 +237,24 @@ export default function ResetPasswordPage() {
 const S: any = {
   shell: {
     width: "100vw",
-    height: "100vh",
+    minHeight: "100vh",
     background: "#f5f6f8",
     display: "grid",
     placeItems: "center",
+    padding: "20px",
+    boxSizing: "border-box" as const,
+  },
+  loadingContainer: {
+    width: "100vw",
+    height: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#f5f6f8",
+  },
+  loadingSpinner: {
+    fontSize: 16,
+    color: "#666",
   },
   card: {
     background: "#fff",
