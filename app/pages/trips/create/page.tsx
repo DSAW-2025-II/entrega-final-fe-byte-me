@@ -82,6 +82,24 @@ export default function TripCreatePage() {
   const [listTab, setListTab] = useState<"all" | "filtered">("filtered");
   const [seatsSelection, setSeatsSelection] = useState<Record<string, number>>({});
   const [roleMode, setRoleMode] = useState<"driver" | "passenger">("passenger");
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const checkMedia = () => {
+      setIsMobile(window.innerWidth < 768);
+      setIsTablet(window.innerWidth >= 768 && window.innerWidth < 1024);
+    };
+    
+    checkMedia();
+    window.addEventListener("resize", checkMedia);
+    
+    return () => {
+      window.removeEventListener("resize", checkMedia);
+    };
+  }, []);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const isPassenger = roleMode === "passenger";
@@ -622,9 +640,20 @@ export default function TripCreatePage() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <header style={styles.header}>
+    <div style={{
+      ...styles.page,
+      padding: isMobile ? "16px 12px" : isTablet ? "24px 16px" : "40px 24px",
+    }}>
+      <div style={{
+        ...styles.container,
+        padding: isMobile ? "20px 16px" : isTablet ? "24px 20px" : "32px",
+      }}>
+        <header style={{
+          ...styles.header,
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? 12 : 16,
+          alignItems: isMobile ? "flex-start" : "center",
+        }}>
           <div style={styles.headerLeft}>
             <div 
               style={styles.brandButton}
@@ -634,7 +663,13 @@ export default function TripCreatePage() {
               <span style={styles.tripTag}>Route</span>
             </div>
           </div>
-          <div style={styles.controlsRow}>
+          <div style={{
+            ...styles.controlsRow,
+            flexDirection: isMobile ? "column" : "row",
+            width: isMobile ? "100%" : "auto",
+            gap: isMobile ? 12 : 24,
+            alignItems: isMobile ? "stretch" : "center",
+          }}>
             <div style={styles.roleSwitch} role="group" aria-label="Modo de uso">
               <div
                 style={{
@@ -728,9 +763,23 @@ export default function TripCreatePage() {
           </div>
         </header>
 
-        <section style={styles.tripCard}>
-          <div style={styles.tripRow}>
-            <div style={styles.locationCard}>
+        <section style={{
+          ...styles.tripCard,
+          width: "100%",
+          maxWidth: "100%",
+          overflow: "visible",
+        }}>
+          <div style={{
+            ...styles.tripRow,
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "stretch" : "flex-end",
+            gap: isMobile ? 12 : 16,
+          }}>
+            <div style={{
+              ...styles.locationCard,
+              minWidth: isMobile ? "100%" : 200,
+              flex: isMobile ? "1 1 100%" : "1 1 auto",
+            }}>
               <label style={styles.locationLabel}>From</label>
               <div style={styles.placeAutocompleteWrapper}>
                 <PlaceAutocomplete
@@ -752,7 +801,12 @@ export default function TripCreatePage() {
             </div>
             <button
               type="button"
-              style={styles.swapButton}
+              style={{
+                ...styles.swapButton,
+                display: isMobile ? "none" : "flex",
+                alignSelf: isMobile ? "stretch" : "center",
+                marginBottom: isMobile ? 0 : 20,
+              }}
               onClick={() => {
                 setTripFrom(tripTo);
                 setTripFromCoord(tripToCoord);
@@ -763,7 +817,11 @@ export default function TripCreatePage() {
             >
               ↻
             </button>
-            <div style={styles.locationCard}>
+            <div style={{
+              ...styles.locationCard,
+              minWidth: isMobile ? "100%" : 200,
+              flex: isMobile ? "1 1 100%" : "1 1 auto",
+            }}>
               <label style={styles.locationLabel}>To</label>
               <div style={styles.placeAutocompleteWrapper}>
                 <PlaceAutocomplete
@@ -783,7 +841,11 @@ export default function TripCreatePage() {
                 />
               </div>
             </div>
-            <div style={styles.dateCard}>
+            <div style={{
+              ...styles.dateCard,
+              minWidth: isMobile ? "100%" : 180,
+              flex: isMobile ? "1 1 100%" : "0 0 auto",
+            }}>
               <label style={styles.inputLabel}>
                 Departure Day {!tripDate && <span style={{ color: "#dc2626" }}>*</span>}
               </label>
@@ -796,7 +858,11 @@ export default function TripCreatePage() {
                 required
               />
             </div>
-            <div style={styles.hourCard}>
+            <div style={{
+              ...styles.hourCard,
+              minWidth: isMobile ? "100%" : 140,
+              flex: isMobile ? "1 1 100%" : "0 0 auto",
+            }}>
               <label style={styles.inputLabel}>
                 Hour {!tripTime && <span style={{ color: "#dc2626" }}>*</span>}
               </label>
@@ -883,7 +949,12 @@ export default function TripCreatePage() {
             </button>
           </div>
 
-          <div style={styles.resultsContainer}>
+          <div style={{
+            ...styles.resultsContainer,
+            width: "100%",
+            maxWidth: "100%",
+            marginTop: isMobile ? 16 : 0,
+          }}>
             <div style={styles.listTabsContainer}>
               <div style={styles.listTabsWrapper}>
                 <button
@@ -1186,6 +1257,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "center",
     fontFamily: "Inter, Nunito Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    position: "relative",
+    overflowX: "hidden",
   },
   container: {
     width: "min(1200px, 100%)",
@@ -1193,8 +1266,12 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 24,
     padding: 32,
     boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-    display: "grid",
+    display: "flex",
+    flexDirection: "column",
     gap: 24,
+    position: "relative",
+    zIndex: 1,
+    overflow: "visible",
   },
   header: {
     display: "flex",
@@ -1322,14 +1399,21 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#0f2230",
   },
   tripCard: {
-    display: "grid",
+    display: "flex",
+    flexDirection: "column",
     gap: 24,
+    width: "100%",
+    position: "relative",
+    zIndex: 1,
   },
   tripRow: {
     display: "flex",
     alignItems: "flex-end",
     gap: 16,
     flexWrap: "wrap",
+    position: "relative",
+    zIndex: 1,
+    width: "100%",
   },
   locationCard: {
     flex: 1,
@@ -1544,6 +1628,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 16,
+    width: "100%",
+    position: "relative",
+    zIndex: 1,
+    marginTop: 0,
   },
   listTabsContainer: {
     width: "100%",

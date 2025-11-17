@@ -301,7 +301,12 @@ export default function LandingPage() {
               >
                 Wheels me
               </button>
-              <button style={styles.secondaryBtn}>My trips</button>
+              <button 
+                style={styles.secondaryBtn}
+                onClick={() => router.push("/pages/trips")}
+              >
+                My trips
+              </button>
             </div>
           </div>
         </section>

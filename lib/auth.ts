@@ -61,23 +61,41 @@ export function isTokenExpired(): boolean {
  */
 export async function verifyToken(token: string): Promise<boolean> {
   try {
-    const response = await fetch(`${API_URL}/api/auth/verify`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    // Crear un AbortController para timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
     
-    if (!response.ok) {
-      return false;
+    try {
+      const response = await fetch(`${API_URL}/api/auth/verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        return false;
+      }
+      
+      const data = await response.json();
+      return data.valid === true;
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.warn("Verificación de token timeout, asumiendo válido si no está expirado");
+        // Si hay timeout, asumir que el token es válido si no está expirado según localStorage
+        return !isTokenExpired();
+      }
+      throw fetchError;
     }
-    
-    const data = await response.json();
-    return data.valid === true;
   } catch (error) {
     console.error("Error verificando token:", error);
-    return false;
+    // En caso de error, asumir válido si no está expirado según localStorage
+    return !isTokenExpired();
   }
 }
 
@@ -168,7 +186,14 @@ export async function ensureValidToken(): Promise<string | null> {
     return null;
   }
   
-  // Verificar que el token sea válido
+  // Si el token no está expirado según localStorage, asumir válido sin verificar con backend
+  // Solo verificar con backend si está cerca de expirar o si hay dudas
+  if (!isTokenExpired()) {
+    // Token no expirado, asumir válido (evitar llamadas innecesarias al backend)
+    return token;
+  }
+  
+  // Token expirado o cerca de expirar, verificar con backend
   const isValid = await verifyToken(token);
   if (!isValid) {
     // Intentar renovar

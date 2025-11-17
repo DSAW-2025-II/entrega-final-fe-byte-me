@@ -382,6 +382,55 @@ export default function MyTrips({ user, userData: initialUserData, onRefreshUser
     [loadTrips, onRefreshUser]
   );
 
+  const handleContact = useCallback(
+    async (entry: any) => {
+      try {
+        const token = await ensureValidToken();
+        if (!token) {
+          alert("No estás autenticado. Inicia sesión nuevamente.");
+          return;
+        }
+
+        // Obtener el teléfono del usuario
+        const firebaseUid = entry.firebase_uid;
+        const userId = entry.user_id;
+        
+        if (!firebaseUid && !userId) {
+          alert("No se pudo identificar al usuario para contactar.");
+          return;
+        }
+
+        // Construir la URL del endpoint
+        const queryParam = firebaseUid 
+          ? `firebase_uid=${encodeURIComponent(firebaseUid)}`
+          : `user_id=${encodeURIComponent(userId)}`;
+        
+        const phoneResponse = await api.get(`/api/users/phone?${queryParam}`, token);
+        
+        if (!phoneResponse || !phoneResponse.phone) {
+          alert("No se encontró el número de teléfono del usuario.");
+          return;
+        }
+
+        // Quitar el "+" del número
+        const phoneNumber = phoneResponse.phone.replace(/^\+/, "");
+        
+        // Mensaje predeterminado
+        const message = encodeURIComponent("Hola, te contacto desde MoveTogether sobre el viaje compartido.");
+        
+        // Construir el link de WhatsApp
+        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+        
+        // Abrir WhatsApp en una nueva ventana
+        window.open(whatsappUrl, "_blank");
+      } catch (err: any) {
+        console.error("Error al contactar usuario:", err);
+        alert(err?.message || "No se pudo obtener el número de teléfono del usuario.");
+      }
+    },
+    []
+  );
+
   const handleStartTrip = useCallback(
     async (tripId: string) => {
       try {
@@ -931,37 +980,69 @@ export default function MyTrips({ user, userData: initialUserData, onRefreshUser
                                     {entry.origin?.address || "Origen desconocido"} →{" "}
                                     {entry.destination?.address || "Destino desconocido"}
                                   </span>
-                                  <button
-                                    type="button"
-                                    style={styles.waitlistAcceptButton}
-                                    onClick={() => handleAcceptPassenger(trip.trip_id, entry.user_id)}
-                                  >
-                                    Aceptar
-                                  </button>
-                                  <button
-                                    type="button"
-                                    style={{
-                                      padding: "4px 10px",
-                                      borderRadius: 6,
-                                      border: "1px solid #dc3545",
-                                      background: "#dc3545",
-                                      color: "#ffffff",
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                      cursor: "pointer",
-                                      whiteSpace: "nowrap",
-                                      transition: "background 0.2s ease",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.background = "#c82333";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.background = "#dc3545";
-                                    }}
-                                    onClick={() => handleRemovePassenger(trip.trip_id, entry.user_id)}
-                                  >
-                                    Cancelar
-                                  </button>
+                                  <div style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    gap: 8,
+                                    alignItems: "center",
+                                    marginLeft: "auto",
+                                  }}>
+                                    <button
+                                      type="button"
+                                      style={styles.waitlistAcceptButton}
+                                      onClick={() => handleAcceptPassenger(trip.trip_id, entry.user_id)}
+                                    >
+                                      Aceptar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={{
+                                        padding: "4px 10px",
+                                        borderRadius: 6,
+                                        border: "1px solid #dc3545",
+                                        background: "#dc3545",
+                                        color: "#ffffff",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        whiteSpace: "nowrap",
+                                        transition: "background 0.2s ease",
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = "#c82333";
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = "#dc3545";
+                                      }}
+                                      onClick={() => handleRemovePassenger(trip.trip_id, entry.user_id)}
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={{
+                                        padding: "4px 10px",
+                                        borderRadius: 6,
+                                        border: "1px solid #0f2230",
+                                        background: "#0f2230",
+                                        color: "#ffffff",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        whiteSpace: "nowrap",
+                                        transition: "background 0.2s ease",
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = "#1a2f3f";
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = "#0f2230";
+                                      }}
+                                      onClick={() => handleContact(entry)}
+                                    >
+                                      Contactar
+                                    </button>
+                                  </div>
                                 </div>
                                 <div style={styles.waitlistSubLine}>
                                   Código: {entry.user_id || "N/A"}
@@ -994,31 +1075,62 @@ export default function MyTrips({ user, userData: initialUserData, onRefreshUser
                                     {entry.destination?.address || "Destino desconocido"}
                                   </span>
                                   {trip.status !== "finished" && (
-                                    <button
-                                      type="button"
-                                      style={{
-                                        marginLeft: "auto",
-                                        padding: "4px 10px",
-                                        borderRadius: 6,
-                                        border: "1px solid #dc3545",
-                                        background: "#dc3545",
-                                        color: "#ffffff",
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: "pointer",
-                                        whiteSpace: "nowrap",
-                                        transition: "background 0.2s ease",
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.background = "#c82333";
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = "#dc3545";
-                                      }}
-                                      onClick={() => handleRemovePassenger(trip.trip_id, entry.user_id)}
-                                    >
-                                      Cancelar
-                                    </button>
+                                    <div style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: 8,
+                                      alignItems: "center",
+                                      marginLeft: "auto",
+                                    }}>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: "4px 10px",
+                                          borderRadius: 6,
+                                          border: "1px solid #dc3545",
+                                          background: "#dc3545",
+                                          color: "#ffffff",
+                                          fontSize: 12,
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          whiteSpace: "nowrap",
+                                          transition: "background 0.2s ease",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.background = "#c82333";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.background = "#dc3545";
+                                        }}
+                                        onClick={() => handleRemovePassenger(trip.trip_id, entry.user_id)}
+                                      >
+                                        Cancelar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: "4px 10px",
+                                          borderRadius: 6,
+                                          border: "1px solid #0f2230",
+                                          background: "#0f2230",
+                                          color: "#ffffff",
+                                          fontSize: 12,
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          whiteSpace: "nowrap",
+                                          transition: "background 0.2s ease",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.background = "#1a2f3f";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.background = "#0f2230";
+                                        }}
+                                        onClick={() => handleContact(entry)}
+                                      >
+                                        Contactar
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                                 <div style={styles.waitlistSubLine}>
