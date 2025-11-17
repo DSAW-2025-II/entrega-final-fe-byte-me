@@ -7,21 +7,13 @@ import { api } from "@/lib/api";
 import { ensureValidToken } from "@/lib/auth";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 import MapPicker from "@/components/MapPicker";
-import MyTrips from "@/components/MyTrips";
-import { useUser } from "@/app/contexts/UserContext";
-import { useAuthGuard } from "@/app/hooks/useAuthGuard";
 
 const TRIP_DRAFT_STORAGE_KEY = "movetogether_tripDraft";
 
 export default function LandingPage() {
   const router = useRouter();
-  const { user, refreshUser } = useUser();
-  const { loading: authLoading } = useAuthGuard({ requireAuth: true });
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showMyTrips, setShowMyTrips] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isTablet, setIsTablet] = useState(false);
   
   // Estados para lugares
   const [from, setFrom] = useState("");
@@ -36,25 +28,6 @@ export default function LandingPage() {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   useEffect(() => {
-    const checkMedia = () => {
-      setIsMobile(window.innerWidth < 768);
-      setIsTablet(window.innerWidth >= 768 && window.innerWidth < 1024);
-    };
-    checkMedia();
-    window.addEventListener("resize", checkMedia);
-    return () => window.removeEventListener("resize", checkMedia);
-  }, []);
-
-  // Mostrar loader mientras se verifica la autenticación
-  if (authLoading) {
-    return (
-      <div style={{ width: "100vw", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f5f6f8" }}>
-        <div style={{ fontSize: 16, color: "#666" }}>Cargando...</div>
-      </div>
-    );
-  }
-
-  useEffect(() => {
     const fetchUserData = async () => {
       try {
         // Verificar y obtener token válido
@@ -65,7 +38,7 @@ export default function LandingPage() {
           return;
         }
 
-        // Obtener usuario desde Firebase Auth y también desde /api/me para tener datos completos
+        // Obtener usuario desde Firebase Auth (no usar /api/me)
         try {
           const { auth: clientAuth } = await import("@/lib/firebaseClient");
           const { onAuthStateChanged } = await import("firebase/auth");
@@ -74,25 +47,14 @@ export default function LandingPage() {
             return;
           }
           
-          onAuthStateChanged(clientAuth, async (currentUser) => {
+          onAuthStateChanged(clientAuth, (currentUser) => {
             if (currentUser) {
               const nameParts = (currentUser.displayName || "").split(" ");
-              const basicUserData = {
+              setUserData({
                 first_name: nameParts[0] || "",
                 last_name: nameParts.slice(1).join(" ") || "",
                 user_photo: currentUser.photoURL || null,
-              };
-              setUserData(basicUserData);
-              
-              // También obtener datos completos desde /api/me
-              try {
-                const meResponse = await api.get("/api/me", validToken);
-                if (meResponse) {
-                  setUserData(meResponse);
-                }
-              } catch (meError) {
-                console.error("Error obteniendo datos completos del usuario:", meError);
-              }
+              });
             }
             setLoading(false);
           });
@@ -107,8 +69,7 @@ export default function LandingPage() {
     };
 
     fetchUserData();
-    refreshUser();
-  }, [router, refreshUser]);
+  }, []);
 
   const userName = userData 
     ? `${userData.first_name || ""} ${userData.last_name || ""}`.trim() || "Usuario"
@@ -131,9 +92,9 @@ export default function LandingPage() {
   return (
     <div style={styles.page}> 
       {/* BARRA SUPERIOR */}
-      <header style={{ ...styles.topbar, padding: isMobile ? "12px 16px" : "16px 20px" }}>
-        <div style={{ ...styles.topbarContent, padding: isMobile ? "0" : "0 20px" }}>
-          <div style={{ ...styles.brand, fontSize: isMobile ? 16 : 18 }}>MoveTogether</div>
+      <header style={styles.topbar}>
+        <div style={styles.topbarContent}>
+          <div style={styles.brand}>MoveTogether</div>
           <button
             style={{
               ...styles.user,
@@ -142,7 +103,7 @@ export default function LandingPage() {
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: isMobile ? 6 : 8,
+              gap: 8,
             }}
             onClick={() => {
               // Guardar origen en sessionStorage antes de ir al perfil
@@ -153,7 +114,7 @@ export default function LandingPage() {
             }}
             title="Ver perfil"
           >
-            <div style={{ ...styles.userAvatarContainer, width: isMobile ? 24 : 28, height: isMobile ? 24 : 28 }}>
+            <div style={styles.userAvatarContainer}>
               {userPhoto ? (
                 <Image
                   src={userPhoto}
@@ -165,27 +126,16 @@ export default function LandingPage() {
                 <div style={styles.userAvatar} />
               )}
             </div>
-            {!isMobile && <span style={{ ...styles.userName, fontSize: isMobile ? 11 : 12 }}>{userName}</span>}
+            <span style={styles.userName}>{userName}</span>
           </button>
         </div>
       </header>
 
       {/* CONTENIDO */}
-      <main style={{ 
-        ...styles.main, 
-        gridTemplateColumns: isMobile ? "1fr" : isTablet ? "1fr" : "1fr 520px",
-        gap: isMobile ? 24 : isTablet ? 32 : 40,
-        padding: isMobile ? "0 16px" : isTablet ? "0 20px" : "0 20px",
-        margin: isMobile ? "16px auto" : "28px auto",
-      }}> 
+      <main style={styles.main}> 
         {/* IZQUIERDA: FORM/CTA */}
-        <section style={{ 
-          ...styles.left, 
-          padding: isMobile ? "24px 20px" : isTablet ? "28px" : 32,
-          height: isMobile ? "auto" : isTablet ? "auto" : 640,
-          minHeight: isMobile ? "auto" : isTablet ? "auto" : 640,
-        }}> 
-          <h1 style={{ ...styles.heroTitle, fontSize: isMobile ? 32 : isTablet ? 40 : 48, lineHeight: isMobile ? "38px" : isTablet ? "46px" : "56px" }}>
+        <section style={styles.left}> 
+          <h1 style={styles.heroTitle}>
             Ride together,
             <br />
             study together.
@@ -351,22 +301,13 @@ export default function LandingPage() {
               >
                 Wheels me
               </button>
-              <button 
-                style={styles.secondaryBtn}
-                onClick={() => setShowMyTrips(!showMyTrips)}
-              >
-                My trips
-              </button>
+              <button style={styles.secondaryBtn}>My trips</button>
             </div>
           </div>
         </section>
 
             {/* DERECHA: MAPA INTERACTIVO */}
-            <aside style={{ 
-              ...styles.right, 
-              height: isMobile ? "400px" : isTablet ? "500px" : 640,
-              order: isMobile ? -1 : 0,
-            }}> 
+            <aside style={styles.right}> 
               <div style={styles.mapContainer} data-map-container>
                 <MapPicker
                   onPlaceSelect={(place) => {
@@ -386,15 +327,6 @@ export default function LandingPage() {
               </div>
             </aside>
       </main>
-
-      {/* SECCIÓN MY TRIPS */}
-      {showMyTrips && (
-        <section style={styles.myTripsSection}>
-          <div style={styles.myTripsContainer}>
-            <MyTrips user={user} userData={userData} onRefreshUser={refreshUser} />
-          </div>
-        </section>
-      )}
     </div>
   );
 }
@@ -701,18 +633,6 @@ const styles: { [k: string]: React.CSSProperties } = {
   coordItem: {
     fontSize: 11,
     fontFamily: "monospace",
-  },
-  myTripsSection: {
-    width: "100%",
-    maxWidth: 1200,
-    margin: "0 auto",
-    padding: "0 20px 28px 20px",
-  },
-  myTripsContainer: {
-    background: "#fff",
-    borderRadius: 12,
-    padding: 32,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
   },
 };
 
