@@ -66,9 +66,7 @@ export default function MyTripsPage() {
 
   const fullName = userData 
     ? `${userData.first_name || ""} ${userData.last_name || ""}`.trim() || "Usuario"
-    : user
-    ? `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Usuario"
-    : "Usuario";
+    : user?.displayName || "Usuario";
 
     return (
     <UserPageLayout active="trips">
